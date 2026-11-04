@@ -6,7 +6,8 @@ First release, with Algorand support.
 
 - Python API (`Indexer`, `AsyncIndexer`) and a command line built on it.
 - Look up accounts, ASAs and applications on the Algorand Indexer.
-- Incremental `sync` with a checkpoint per account; re-running adds no duplicates.
+- Incremental `sync` with a checkpoint per account; re-running adds no duplicates, and
+  an interrupted sync resumes from where it stopped with no gaps.
 - Native support for ASA actions, app calls, inner transactions, atomic groups, rekeyed
   accounts, minimum balance and participation status.
 - Metrics over stored transactions, and export to CSV, JSON and Parquet.

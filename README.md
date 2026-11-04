@@ -58,8 +58,10 @@ As of round    68936216
 
 ## Algorand
 
-Reads the [Algorand Indexer REST API](https://dev.algorand.co/reference/rest-api/indexer/).
-Addresses are validated with `py-algorand-sdk` before any request is sent.
+Reads the official [Algorand Indexer REST API](https://dev.algorand.co/reference/rest-api/indexer/)
+over `aiohttp`, which gives async requests and the HTTP status needed to recognise rate
+limits. `py-algorand-sdk` (`algosdk`) handles address validation and encoding, before
+any request is sent.
 
 | Option | Meaning |
 |---|---|
@@ -140,7 +142,7 @@ Synced JCN7TCSQEG6YHAQ7F6BS73J2UDXI2L7S7WJU35LYMIK22IL264ZRJO55QM on algorand te
 ### What is recorded
 
 Every transaction has shared fields (`id`, `time`, `sender`, `receiver`, `amount`, `fee`,
-`status`, `chain`) and a `native` block with Algorand's own concepts:
+`status`, `chain`, `network`) and a `native` block with Algorand's own concepts:
 
 - **ASAs:** create, reconfigure, destroy, opt-in, opt-out, transfer, clawback, freeze and
   unfreeze.
@@ -173,15 +175,20 @@ multichain_indexer/
     pipeline.py       fetch, store, summarise; incremental sync
     storage.py        SQLite behind a storage interface
     metrics.py        pandas metrics any chain can use
+    export.py         CSV, JSON and Parquet
     http.py           timeouts, retries, Retry-After
     ratelimit.py      per-endpoint request pacing
     cache.py          optional cache for data that can never change
+    config.py         settings from .env and the environment
+    observability.py  structured logs with secrets masked
   adapters/algorand/  client, parser, metrics
 ```
 
-A sync can be stopped and re-run at any point. Writes are upserts, so nothing is stored
-twice, and the checkpoint only moves once every page is stored. An interrupted first sync
-starts again from the newest transaction.
+A sync can be stopped at any point and picks up where it left off. It walks a fixed
+range of rounds, and each page's records and the cursor for the next page are saved in
+one database transaction, so the two can never disagree. Writes are upserts, so nothing
+is stored twice, and the checkpoint only moves once the whole range is stored. While a
+sync runs it shows a running count, because the total is not known in advance.
 
 ## Security
 

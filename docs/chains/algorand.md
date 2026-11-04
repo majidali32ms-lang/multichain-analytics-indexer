@@ -1,6 +1,8 @@
 # Algorand
 
-Reads the Algorand Indexer REST API. Addresses are validated with `py-algorand-sdk`.
+Reads the official Algorand Indexer REST API over `aiohttp`, which gives async requests
+and the HTTP status needed to recognise rate limits. `py-algorand-sdk` (`algosdk`) handles
+address validation and encoding.
 
 ## Networks
 
@@ -27,6 +29,8 @@ multichain-indexer sync <address>
 multichain-indexer metrics --days 30 --account <address>
 multichain-indexer export --format csv --output transactions.csv
 ```
+
+`sync` can be stopped at any point and resumes from the next page it had not stored.
 
 Amounts are held in microAlgos and shown in Algo. An asset transfer's amount is in the
 ASA's base units.
