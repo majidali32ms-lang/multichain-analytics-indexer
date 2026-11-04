@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Addresses and participation public keys in saved testnet responses are public chain data"
+regexTarget = "line"
+regexes = [
+    '''"(auth-addr|rekey-to|selection-participation-key|state-proof-key|vote-participation-key)": "''',
+]
