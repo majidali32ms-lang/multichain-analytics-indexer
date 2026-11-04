@@ -1,0 +1,98 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "multichain-analytics-indexer"
+version = "0.1.0"
+description = "Index and analyse blockchain accounts and transactions, in each chain's own terms."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+authors = [{ name = "Majid Khan" }]
+license-files = ["LICENSE"]
+keywords = ["algorand", "blockchain", "indexer", "analytics"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
+    "Typing :: Typed",
+]
+dependencies = [
+    "aiohttp>=3.11,<4",
+    "click>=8.1,<9",
+    "pandas>=2.2,<4",
+    "py-algorand-sdk>=2.12,<3",
+    "pyarrow>=18",
+    "pydantic>=2.10,<3",
+    "python-dotenv>=1.0,<2",
+]
+
+[project.urls]
+Homepage = "https://github.com/majidali32ms-lang/multichain-analytics-indexer"
+Issues = "https://github.com/majidali32ms-lang/multichain-analytics-indexer/issues"
+
+[project.scripts]
+multichain-indexer = "multichain_indexer.cli:main"
+
+[dependency-groups]
+dev = [
+    "build",
+    "ipykernel",
+    "mkdocs-material",
+    "mkdocstrings[python]",
+    "mypy",
+    "nbclient",
+    "nbformat",
+    "pip-audit",
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "ruff",
+    "twine",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["multichain_indexer"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "-m",
+    "not live",
+    "--cov=multichain_indexer",
+    "--cov-branch",
+    "--cov-report=term-missing",
+    "--cov-fail-under=85",
+]
+markers = ["live: talks to a public test network; run with -m live --no-cov"]
+filterwarnings = ["error"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "N", "SIM", "RUF"]
+# Exception names follow the public API: NotFound, RateLimited, InvalidAddress.
+ignore = ["N818"]
+
+[tool.mypy]
+strict = true
+packages = ["multichain_indexer"]
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["algosdk.*", "pandas.*"]
+ignore_missing_imports = true
