@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import sys
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -23,7 +24,7 @@ from multichain_indexer.core.observability import (
     redact_url,
 )
 from multichain_indexer.core.registry import create_indexer
-from multichain_indexer.core.storage import SQLiteStorage
+from multichain_indexer.core.storage import Backfill, SQLiteStorage, SyncState
 
 NOW = datetime(2026, 1, 2, tzinfo=UTC)
 PAST_64_BITS = 3 * 10**20
@@ -40,6 +41,7 @@ def transaction(
     fee: int = 10,
     status: Status = Status.FINAL,
     time: datetime = NOW,
+    network: str = "testnet",
 ) -> TransactionRecord:
     return TransactionRecord(
         id=tx_id,
@@ -50,6 +52,7 @@ def transaction(
         fee=fee,
         status=status,
         chain="toy",
+        network=network,
         native=ToyNative(),
     )
 
@@ -63,8 +66,8 @@ def test_records_reject_negative_amounts_and_naive_times() -> None:
 
 def test_storage_upsert_adds_no_duplicates_and_keeps_big_values(tmp_path: Path) -> None:
     storage = SQLiteStorage(tmp_path / "db" / "x.db")
-    storage.save_transactions("testnet", "alice", [transaction(fee=PAST_64_BITS)])
-    storage.save_transactions("testnet", "alice", [transaction(fee=PAST_64_BITS)])
+    storage.save_transactions("toy", "testnet", "alice", [transaction(fee=PAST_64_BITS)])
+    storage.save_transactions("toy", "testnet", "alice", [transaction(fee=PAST_64_BITS)])
 
     stored = storage.load_transactions("toy", "testnet", ToyNative)
 
@@ -76,8 +79,8 @@ def test_storage_upsert_adds_no_duplicates_and_keeps_big_values(tmp_path: Path) 
 
 def test_storage_upsert_replaces_a_pending_record(tmp_path: Path) -> None:
     storage = SQLiteStorage(tmp_path / "x.db")
-    storage.save_transactions("testnet", "alice", [transaction(status=Status.PENDING)])
-    storage.save_transactions("testnet", "alice", [transaction(status=Status.FINAL)])
+    storage.save_transactions("toy", "testnet", "alice", [transaction(status=Status.PENDING)])
+    storage.save_transactions("toy", "testnet", "alice", [transaction(status=Status.FINAL)])
     assert storage.load_transactions("toy", "testnet", ToyNative)[0].status is Status.FINAL
     storage.close()
 
@@ -85,9 +88,9 @@ def test_storage_upsert_replaces_a_pending_record(tmp_path: Path) -> None:
 def test_storage_filters_by_network_account_and_time(tmp_path: Path) -> None:
     storage = SQLiteStorage(tmp_path / "x.db")
     old = NOW - timedelta(days=10)
-    storage.save_transactions("testnet", "alice", [transaction("a", time=old)])
-    storage.save_transactions("testnet", "carol", [transaction("b")])
-    storage.save_transactions("mainnet", "alice", [transaction("c")])
+    storage.save_transactions("toy", "testnet", "alice", [transaction("a", time=old)])
+    storage.save_transactions("toy", "testnet", "carol", [transaction("b")])
+    storage.save_transactions("toy", "mainnet", "alice", [transaction("c", network="mainnet")])
 
     load = storage.load_transactions
     assert [r.id for r in load("toy", "testnet", ToyNative)] == ["b", "a"]
@@ -97,21 +100,50 @@ def test_storage_filters_by_network_account_and_time(tmp_path: Path) -> None:
     storage.close()
 
 
-def test_checkpoints_are_kept_per_network(tmp_path: Path) -> None:
+def test_sync_state_is_kept_per_network(tmp_path: Path) -> None:
     storage = SQLiteStorage(tmp_path / "x.db")
-    assert storage.load_checkpoint("toy", "testnet", "alice") is None
-    storage.save_checkpoint("toy", "testnet", "alice", 9)
-    storage.save_checkpoint("toy", "testnet", "alice", 12)
-    assert storage.load_checkpoint("toy", "testnet", "alice") == 12
-    assert storage.load_checkpoint("toy", "mainnet", "alice") is None
+    assert storage.load_sync_state("toy", "testnet", "alice") == SyncState()
+    storage.finish_sync("toy", "testnet", "alice", 9)
+    storage.finish_sync("toy", "testnet", "alice", 12)
+    assert storage.load_sync_state("toy", "testnet", "alice").checkpoint == 12
+    assert storage.load_sync_state("toy", "mainnet", "alice") == SyncState()
+    storage.close()
+
+
+def test_backfill_is_saved_with_its_records_and_cleared_on_finish(tmp_path: Path) -> None:
+    storage = SQLiteStorage(tmp_path / "x.db")
+    backfill = Backfill(None, 100, "next")
+    storage.save_transactions("toy", "testnet", "alice", [transaction()], backfill=backfill)
+    assert storage.load_sync_state("toy", "testnet", "alice").backfill == backfill
+
+    storage.finish_sync("toy", "testnet", "alice", 100)
+    state = storage.load_sync_state("toy", "testnet", "alice")
+    assert state == SyncState(checkpoint=100)
+    storage.close()
+
+
+def test_failed_write_leaves_neither_records_nor_cursor(tmp_path: Path) -> None:
+    def records_then_crash() -> Iterator[TransactionRecord]:
+        yield transaction("a")
+        raise RuntimeError("disk full")
+
+    storage = SQLiteStorage(tmp_path / "x.db")
+    with pytest.raises(RuntimeError):
+        storage.save_transactions(
+            "toy", "testnet", "alice", records_then_crash(), backfill=Backfill(None, 100, "next")
+        )
+    assert storage.load_transactions("toy", "testnet", ToyNative) == []
+    assert storage.load_sync_state("toy", "testnet", "alice") == SyncState()
     storage.close()
 
 
 def test_snapshot_keeps_the_latest_state(tmp_path: Path) -> None:
     storage = SQLiteStorage(tmp_path / "x.db")
     for balance in (1, 2):
-        record = AccountRecord(address="alice", balance=balance, chain="toy", native=ToyNative())
-        storage.save_snapshot("testnet", record)
+        record = AccountRecord(
+            address="alice", balance=balance, chain="toy", network="testnet", native=ToyNative()
+        )
+        storage.save_snapshot(record)
     rows = storage._connection.execute("SELECT record FROM snapshots").fetchall()  # type: ignore[attr-defined]
     assert [json.loads(row[0])["balance"] for row in rows] == [2]
     storage.close()
@@ -146,6 +178,7 @@ def test_frame_has_shared_columns_and_exact_amounts() -> None:
     frame = transactions_frame([transaction(fee=PAST_64_BITS)])
     assert frame.loc[0, "fee"] == PAST_64_BITS
     assert frame.loc[0, "native"] == {"label": "x"}
+    assert frame.loc[0, "network"] == "testnet"
 
 
 def test_export_csv_and_json_as_text() -> None:
@@ -153,6 +186,7 @@ def test_export_csv_and_json_as_text() -> None:
     assert str(PAST_64_BITS) in (export_transactions(records, "csv") or "")
     exported = json.loads(export_transactions(records, "json") or "")
     assert exported[0]["fee"] == str(PAST_64_BITS)
+    assert exported[0]["network"] == "testnet"
     assert json.loads(exported[0]["native"]) == {"label": "x"}
 
 

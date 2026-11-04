@@ -22,7 +22,7 @@ EXAMPLES = Path(__file__).parent.parent / "examples" / "algorand"
 
 def test_lookups_and_incremental_sync_on_testnet(tmp_path: Path) -> None:
     with Indexer("algorand", database=tmp_path / "live.db") as indexer:
-        assert indexer.account(ACCOUNT).address == ACCOUNT
+        assert indexer.account(ACCOUNT).network == "testnet"
         assert indexer.asset(ASA_ID).id == str(ASA_ID)
         assert indexer.contract(APP_ID).id == str(APP_ID)
 

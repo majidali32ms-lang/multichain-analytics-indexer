@@ -25,7 +25,9 @@ async def indexer(settings: Settings) -> AsyncIterator[AlgorandIndexer]:
 
 
 async def all_pages(adapter: AlgorandIndexer, **bounds: int) -> list[list[TransactionRecord]]:
-    return [page async for page in adapter.iter_account_transactions(ADDRESS, **bounds)]
+    return [
+        list(page.records) async for page in adapter.iter_account_transactions(ADDRESS, **bounds)
+    ]
 
 
 def page_of(fixture: str, next_token: str | None = None) -> Reply:

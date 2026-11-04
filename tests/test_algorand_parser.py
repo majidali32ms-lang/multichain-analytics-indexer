@@ -46,6 +46,7 @@ def test_every_transaction_type_keeps_the_shared_fields(name: str) -> None:
     assert record.time.timestamp() == raw["round-time"]
     assert record.status is Status.FINAL
     assert record.chain == "algorand"
+    assert record.network == "testnet"
     assert native_of(record).round == raw["confirmed-round"]
     assert native_of(record).tx_type == raw["tx-type"]
 
@@ -125,7 +126,7 @@ def test_rekey_transaction_names_the_new_signer() -> None:
 
 def test_rekeyed_account_shows_its_auth_addr() -> None:
     raw = load_fixture("account_rekeyed")
-    native = cast(AlgorandAccount, parse_account(raw).native)
+    native = cast(AlgorandAccount, parse_account(raw, "testnet").native)
     assert native.auth_addr == raw["account"]["auth-addr"]
     assert native.auth_addr
 
@@ -133,7 +134,7 @@ def test_rekeyed_account_shows_its_auth_addr() -> None:
 def test_account_fields() -> None:
     raw = load_fixture("account")
     account = raw["account"]
-    record = parse_account(raw)
+    record = parse_account(raw, "testnet")
     native = cast(AlgorandAccount, record.native)
     assert record.address == account["address"]
     assert record.balance == account["amount"]
@@ -145,7 +146,7 @@ def test_account_fields() -> None:
 def test_asset_fields() -> None:
     raw = load_fixture("asset")
     params = raw["asset"]["params"]
-    record = parse_asset(raw)
+    record = parse_asset(raw, "testnet")
     assert record.id == str(raw["asset"]["index"])
     assert record.decimals == params["decimals"]
     assert record.total == params["total"]
@@ -155,7 +156,7 @@ def test_asset_fields() -> None:
 
 def test_application_fields() -> None:
     raw = load_fixture("application")
-    record = parse_application(raw)
+    record = parse_application(raw, "testnet")
     assert record.id == str(raw["application"]["id"])
     assert record.creator == raw["application"]["params"]["creator"]
     assert isinstance(record.native, AlgorandApplication)
@@ -275,7 +276,7 @@ def test_malformed_message_names_fields_not_values() -> None:
 @pytest.mark.parametrize("parse", [parse_account, parse_asset, parse_application])
 def test_lookups_refuse_a_missing_body(parse: object) -> None:
     with pytest.raises(MalformedResponse):
-        parse({})  # type: ignore[operator]
+        parse({}, "testnet")  # type: ignore[operator]
 
 
 def test_algorand_metrics() -> None:
