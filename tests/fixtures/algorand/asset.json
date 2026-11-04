@@ -1,0 +1,24 @@
+{
+ "asset": {
+  "created-at-round": 23654193,
+  "deleted": false,
+  "index": 106414664,
+  "params": {
+   "clawback": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+   "creator": "YAUGIML5M4PUOT55BSM57UHGJTTFGTXGSXHWFNQQQVOYVLOV36AOIQXAVU",
+   "decimals": 2,
+   "default-frozen": false,
+   "freeze": "YPISNAUR5ZBEQCWKGERGZIKE2YJRO3JD2JNFWRMETHHGROHNIQM4FGW4A4",
+   "manager": "YPISNAUR5ZBEQCWKGERGZIKE2YJRO3JD2JNFWRMETHHGROHNIQM4FGW4A4",
+   "name": "Hesab Afghani",
+   "name-b64": "SGVzYWIgQWZnaGFuaQ==",
+   "reserve": "YAUGIML5M4PUOT55BSM57UHGJTTFGTXGSXHWFNQQQVOYVLOV36AOIQXAVU",
+   "total": 18446744073709551615,
+   "unit-name": "HAFN",
+   "unit-name-b64": "SEFGTg==",
+   "url": "https://hesab.af",
+   "url-b64": "aHR0cHM6Ly9oZXNhYi5hZg=="
+  }
+ },
+ "current-round": 68936100
+}

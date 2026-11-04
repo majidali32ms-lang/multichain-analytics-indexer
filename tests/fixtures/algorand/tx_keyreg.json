@@ -1,0 +1,26 @@
+{
+ "close-rewards": 0,
+ "closing-amount": 0,
+ "confirmed-round": 68406164,
+ "fee": 2000000,
+ "first-valid": 68406161,
+ "genesis-hash": "SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=",
+ "genesis-id": "testnet-v1.0",
+ "id": "VHY72K6UF4INSESW67MHKJHYSOUFVJC5NVUYQXEW5CUCOT26QAEA",
+ "intra-round-offset": 0,
+ "keyreg-transaction": {
+  "non-participation": false,
+  "selection-participation-key": "KpWjX4Cr9beA0aHCmWACQMK9ISM6zDBp5tHGupVWz6k=",
+  "state-proof-key": "6UlxlZf4P4/uRI8t68DPYW5bCEV/pcmWdOogG/cwuun7OuBbML/t9uFLS4blmwN5wpSBNcmdc/BjNyIlt5LVGw==",
+  "vote-first-valid": 59902091,
+  "vote-key-dilution": 3381,
+  "vote-last-valid": 71328177,
+  "vote-participation-key": "mArNvPp8Eu1uBBgsQnevQ6htEoC0z5JqVfDTQryOO2E="
+ },
+ "last-valid": 68407161,
+ "receiver-rewards": 0,
+ "round-time": 1792377903,
+ "sender": "JH2EMT37ENMPOHOZABYV7EB27Y4OC2AZBCW47CQX6L77Z6B6BG4XKY7TJ4",
+ "sender-rewards": 0,
+ "tx-type": "keyreg"
+}

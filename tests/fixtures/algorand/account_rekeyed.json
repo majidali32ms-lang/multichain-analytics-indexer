@@ -1,0 +1,82 @@
+{
+ "account": {
+  "address": "6LTHAOR6F3L4QY6ANKNXP3CSNUDXROHNKCI4PAQ5ZV4UWRPANGLAMSLA5M",
+  "amount": 1199000,
+  "amount-without-pending-rewards": 1199000,
+  "assets": [
+   {
+    "amount": 0,
+    "asset-id": 754966563,
+    "deleted": false,
+    "is-frozen": false,
+    "opted-in-at-round": 68900758
+   },
+   {
+    "amount": 0,
+    "asset-id": 715104482,
+    "deleted": false,
+    "is-frozen": false,
+    "opted-in-at-round": 68900758
+   },
+   {
+    "amount": 0,
+    "asset-id": 737519557,
+    "deleted": false,
+    "is-frozen": false,
+    "opted-in-at-round": 68900758
+   },
+   {
+    "amount": 0,
+    "asset-id": 715104983,
+    "deleted": false,
+    "is-frozen": false,
+    "opted-in-at-round": 68900758
+   },
+   {
+    "amount": 0,
+    "asset-id": 754966615,
+    "deleted": false,
+    "is-frozen": false,
+    "opted-in-at-round": 68900758
+   },
+   {
+    "amount": 0,
+    "asset-id": 754966648,
+    "deleted": false,
+    "is-frozen": false,
+    "opted-in-at-round": 68900758
+   },
+   {
+    "amount": 0,
+    "asset-id": 749475458,
+    "deleted": false,
+    "is-frozen": false,
+    "opted-in-at-round": 68900758
+   },
+   {
+    "amount": 0,
+    "asset-id": 757012487,
+    "deleted": false,
+    "is-frozen": false,
+    "opted-in-at-round": 68900758
+   }
+  ],
+  "auth-addr": "74ID6TRP5QY3PISCSN42BZQYB3ILZSDNXMFQ4C7WOP5P3TYCEEHFKM4BSA",
+  "created-at-round": 68900758,
+  "deleted": false,
+  "min-balance": 900000,
+  "pending-rewards": 0,
+  "reward-base": 27521,
+  "rewards": 0,
+  "round": 68936101,
+  "sig-type": "sig",
+  "status": "Offline",
+  "total-apps-opted-in": 0,
+  "total-assets-opted-in": 8,
+  "total-box-bytes": 0,
+  "total-boxes": 0,
+  "total-created-apps": 0,
+  "total-created-assets": 0
+ },
+ "current-round": 68936101
+}

@@ -1,0 +1,23 @@
+{
+ "asset-transfer-transaction": {
+  "amount": 1000,
+  "asset-id": 106414664,
+  "close-amount": 0,
+  "receiver": "SGE5AZ5UCHVZA4KX4VDL4XJRZ2V6ERUC2SXCHDSAWVTKOGPVAO4EXW62SE"
+ },
+ "close-rewards": 0,
+ "closing-amount": 0,
+ "confirmed-round": 68896346,
+ "fee": 1000,
+ "first-valid": 68896344,
+ "genesis-hash": "SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=",
+ "genesis-id": "testnet-v1.0",
+ "id": "SJGFFG2JBWHKFGRYY6PIS5OWZOLMOS6KJJ5GBUMWJ74UTSJOTZGQ",
+ "intra-round-offset": 9,
+ "last-valid": 68897344,
+ "receiver-rewards": 0,
+ "round-time": 1793702605,
+ "sender": "JCN7TCSQEG6YHAQ7F6BS73J2UDXI2L7S7WJU35LYMIK22IL264ZRJO55QM",
+ "sender-rewards": 0,
+ "tx-type": "axfer"
+}

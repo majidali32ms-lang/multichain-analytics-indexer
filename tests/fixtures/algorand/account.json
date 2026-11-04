@@ -1,0 +1,39 @@
+{
+ "account": {
+  "address": "JCN7TCSQEG6YHAQ7F6BS73J2UDXI2L7S7WJU35LYMIK22IL264ZRJO55QM",
+  "amount": 482000,
+  "amount-without-pending-rewards": 482000,
+  "assets": [
+   {
+    "amount": 50505560,
+    "asset-id": 106414664,
+    "deleted": false,
+    "is-frozen": false,
+    "opted-in-at-round": 60842376
+   },
+   {
+    "amount": 3267000,
+    "asset-id": 106414716,
+    "deleted": false,
+    "is-frozen": false,
+    "opted-in-at-round": 64416413
+   }
+  ],
+  "created-at-round": 60842374,
+  "deleted": false,
+  "min-balance": 300000,
+  "pending-rewards": 0,
+  "reward-base": 27521,
+  "rewards": 0,
+  "round": 68936101,
+  "sig-type": "sig",
+  "status": "Offline",
+  "total-apps-opted-in": 0,
+  "total-assets-opted-in": 2,
+  "total-box-bytes": 0,
+  "total-boxes": 0,
+  "total-created-apps": 0,
+  "total-created-assets": 0
+ },
+ "current-round": 68936101
+}

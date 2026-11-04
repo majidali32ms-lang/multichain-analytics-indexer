@@ -1,0 +1,11 @@
+{
+ "data": {
+  "migration-required": false,
+  "read-only-mode": true
+ },
+ "db-available": true,
+ "is-migrating": false,
+ "message": "68936097",
+ "round": 68936097,
+ "version": "3.10.0-ndly2"
+}

@@ -1,0 +1,36 @@
+{
+ "asset-config-transaction": {
+  "asset-id": 0,
+  "params": {
+   "clawback": "5NA54CDLMAMUY3NYQ7Y5ZZFMY2VZVRV5GW7M6UNCROG63HYG6MXIXVLL4E",
+   "creator": "5NA54CDLMAMUY3NYQ7Y5ZZFMY2VZVRV5GW7M6UNCROG63HYG6MXIXVLL4E",
+   "decimals": 0,
+   "default-frozen": false,
+   "freeze": "5NA54CDLMAMUY3NYQ7Y5ZZFMY2VZVRV5GW7M6UNCROG63HYG6MXIXVLL4E",
+   "manager": "5NA54CDLMAMUY3NYQ7Y5ZZFMY2VZVRV5GW7M6UNCROG63HYG6MXIXVLL4E",
+   "metadata-hash": "1hp7vGGREE9EXL1PWLvcj6rbTV6Z6EKxR+Zl0kHnrbk=",
+   "name": "checking_the_test_",
+   "name-b64": "Y2hlY2tpbmdfdGhlX3Rlc3Rf",
+   "reserve": "5NA54CDLMAMUY3NYQ7Y5ZZFMY2VZVRV5GW7M6UNCROG63HYG6MXIXVLL4E",
+   "total": 1000000,
+   "unit-name": "CHECKIN",
+   "unit-name-b64": "Q0hFQ0tJTg=="
+  }
+ },
+ "close-rewards": 0,
+ "closing-amount": 0,
+ "confirmed-round": 68898321,
+ "created-asset-index": 775408217,
+ "fee": 1000,
+ "first-valid": 68898316,
+ "genesis-hash": "SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=",
+ "genesis-id": "testnet-v1.0",
+ "id": "O4EV5PFP5RNMZEHIVUDAMBCSRQ2VMCFXDLMBGFTHTMZGTFLNMSFQ",
+ "intra-round-offset": 0,
+ "last-valid": 68898326,
+ "receiver-rewards": 0,
+ "round-time": 1793707944,
+ "sender": "5NA54CDLMAMUY3NYQ7Y5ZZFMY2VZVRV5GW7M6UNCROG63HYG6MXIXVLL4E",
+ "sender-rewards": 0,
+ "tx-type": "acfg"
+}

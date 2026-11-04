@@ -1,0 +1,193 @@
+{
+ "current-round": 68936102,
+ "next-token": "ts8bBAAAAAABAAAA",
+ "transactions": [
+  {
+   "application-transaction": {
+    "access": [],
+    "accounts": [],
+    "application-args": [
+     "MXLKnQ=="
+    ],
+    "application-id": 746230710,
+    "box-references": [
+     {
+      "app": 734834614,
+      "name": "dgAAAAAAAAAD"
+     },
+     {
+      "app": 0,
+      "name": "c3Rha2Vycw=="
+     },
+     {
+      "app": 0,
+      "name": null
+     },
+     {
+      "app": 0,
+      "name": null
+     },
+     {
+      "app": 0,
+      "name": null
+     },
+     {
+      "app": 0,
+      "name": null
+     },
+     {
+      "app": 0,
+      "name": null
+     }
+    ],
+    "foreign-apps": [
+     734834614
+    ],
+    "foreign-assets": [],
+    "global-state-schema": {
+     "num-byte-slice": 0,
+     "num-uint": 0
+    },
+    "local-state-schema": {
+     "num-byte-slice": 0,
+     "num-uint": 0
+    },
+    "on-completion": "noop"
+   },
+   "close-rewards": 0,
+   "closing-amount": 0,
+   "confirmed-round": 68935052,
+   "fee": 0,
+   "first-valid": 68935050,
+   "genesis-hash": "SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=",
+   "genesis-id": "testnet-v1.0",
+   "group": "twvt/EnKohR3K5YugXZa8ylNrRvlt0WQKEXBc3I0ds4=",
+   "id": "4ZFKLX4YAB2L4TYQI2UVOO77AMI4E6YVWDWGM3JID7E42MWDOGVA",
+   "intra-round-offset": 0,
+   "last-valid": 68935150,
+   "receiver-rewards": 0,
+   "round-time": 1793807402,
+   "sender": "KIMUPURGCNLIWBCRT5OVHYERU4U6D4ZMYRWNRT4NX6BVSB7CDYV77OD6PE",
+   "sender-rewards": 0,
+   "tx-type": "appl"
+  },
+  {
+   "application-transaction": {
+    "access": [],
+    "accounts": [],
+    "application-args": [
+     "QA4U+w==",
+     "ACBq6E2OWXSbIPRn5MipyAhcqjyXTI2LI672C72HD1HkwQ==",
+     "ACDruKe16sVlFNNxwOZWgYiagFg7twHO6pYpHJIT+IeK9Q==",
+     "AEDcYeq2ehKKF/PnV2q/HUZ+ptjVJhlkz5CGnooWQW3sWvCTTaDRO5hdt6FCw6BfHzEIJ/WjOW0AOq5FvqAOrNY2",
+     "AAAAAAQbz48=",
+     "AAAAAAQfLsc=",
+     "AAAAAAAAAdc="
+    ],
+    "application-id": 746230710,
+    "box-references": [
+     {
+      "app": 734834614,
+      "name": "dgAAAAAAAAAD"
+     },
+     {
+      "app": 0,
+      "name": null
+     }
+    ],
+    "foreign-apps": [
+     734834614
+    ],
+    "foreign-assets": [],
+    "global-state-schema": {
+     "num-byte-slice": 0,
+     "num-uint": 0
+    },
+    "local-state-schema": {
+     "num-byte-slice": 0,
+     "num-uint": 0
+    },
+    "on-completion": "noop"
+   },
+   "close-rewards": 0,
+   "closing-amount": 0,
+   "confirmed-round": 68931510,
+   "fee": 3000,
+   "first-valid": 68931508,
+   "genesis-hash": "SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=",
+   "genesis-id": "testnet-v1.0",
+   "group": "F4zN52tFpqWGrJKZAIJjYIgBllGvscyVCJaiWVB1gNg=",
+   "id": "UC7GOKVDV6D3E367PCR32MKIZXS5CROWWJTX5L4CLIFOS3PJQYLQ",
+   "inner-txns": [
+    {
+     "application-transaction": {
+      "access": [],
+      "accounts": [],
+      "application-args": [
+       "L6IsSw==",
+       "AAAAAAAAAAM="
+      ],
+      "application-id": 734834614,
+      "box-references": [],
+      "foreign-apps": [],
+      "foreign-assets": [],
+      "global-state-schema": {
+       "num-byte-slice": 0,
+       "num-uint": 0
+      },
+      "local-state-schema": {
+       "num-byte-slice": 0,
+       "num-uint": 0
+      },
+      "on-completion": "noop"
+     },
+     "close-rewards": 0,
+     "closing-amount": 0,
+     "confirmed-round": 68931510,
+     "fee": 0,
+     "first-valid": 68931508,
+     "intra-round-offset": 1,
+     "last-valid": 68932508,
+     "logs": [
+      "FR98dRYsSW4kymNT09fO/WampecxKAItR8tcbKYMPSJ0LSfPUhlH0iYTVosEUZ9dU+CRpynh8yzEbNjPjb+DWQfiHis="
+     ],
+     "receiver-rewards": 0,
+     "round-time": 1793797803,
+     "sender": "EFKAXIE4LENTO65VZRABMYBVTWXV6AANYM7YA2STRODSQXK2VFTGYZOIDE",
+     "sender-rewards": 0,
+     "tx-type": "appl"
+    },
+    {
+     "close-rewards": 0,
+     "closing-amount": 0,
+     "confirmed-round": 68931510,
+     "fee": 0,
+     "first-valid": 68931508,
+     "intra-round-offset": 1,
+     "keyreg-transaction": {
+      "non-participation": false,
+      "selection-participation-key": "67interFZRTTccDmVoGImoBYO7cBzuqWKRySE/iHivU=",
+      "state-proof-key": "3GHqtnoSihfz51dqvx1GfqbY1SYZZM+Qhp6KFkFt7Frwk02g0TuYXbehQsOgXx8xCCf1ozltADquRb6gDqzWNg==",
+      "vote-first-valid": 68931471,
+      "vote-key-dilution": 471,
+      "vote-last-valid": 69152455,
+      "vote-participation-key": "auhNjll0myD0Z+TIqcgIXKo8l0yNiyOu9gu9hw9R5ME="
+     },
+     "last-valid": 68932508,
+     "receiver-rewards": 0,
+     "round-time": 1793797803,
+     "sender": "EFKAXIE4LENTO65VZRABMYBVTWXV6AANYM7YA2STRODSQXK2VFTGYZOIDE",
+     "sender-rewards": 0,
+     "tx-type": "keyreg"
+    }
+   ],
+   "intra-round-offset": 1,
+   "last-valid": 68932508,
+   "receiver-rewards": 0,
+   "round-time": 1793797803,
+   "sender": "KIMUPURGCNLIWBCRT5OVHYERU4U6D4ZMYRWNRT4NX6BVSB7CDYV77OD6PE",
+   "sender-rewards": 0,
+   "tx-type": "appl"
+  }
+ ]
+}

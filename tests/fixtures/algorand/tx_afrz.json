@@ -1,0 +1,23 @@
+{
+ "asset-freeze-transaction": {
+  "address": "U3R6UFBIBYPC3CNLJYLH57WGVJS2XFZFJH6YR3B3A5NSCIRMPMVLFGCDJ4",
+  "asset-id": 775317095,
+  "new-freeze-status": true
+ },
+ "auth-addr": "RDPZEY2KGKZFFPMR42IUD22NK3HTDOAY3CHAQNCWELLUVR4UG2B7CLI7KQ",
+ "close-rewards": 0,
+ "closing-amount": 0,
+ "confirmed-round": 68836447,
+ "fee": 3000,
+ "first-valid": 68836445,
+ "genesis-hash": "SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=",
+ "genesis-id": "testnet-v1.0",
+ "id": "AM5HGBCYRU6PS3JISOS3D6WDR3KBMY2PX2ODJ5BJP6ATBESRKNVA",
+ "intra-round-offset": 0,
+ "last-valid": 68837445,
+ "receiver-rewards": 0,
+ "round-time": 1793540554,
+ "sender": "KRN2UGEQ6NODCUGSJF2LCCLEAZQNTBLFVVUBEUQCWX6U4MFZ2EQPRZYVVU",
+ "sender-rewards": 0,
+ "tx-type": "afrz"
+}

@@ -1,0 +1,62 @@
+{
+ "application-transaction": {
+  "access": [],
+  "accounts": [
+   "4CLLD53SHPJBVH7W773MPZCTLO7YPM7SRCGEU4LK4DC5ESDHRWUBNNBVKU"
+  ],
+  "application-args": [
+   "AAAAAAAAAAE=",
+   "AAVUPfcpwAA=",
+   "NmFlYjUwZTI5NWE1NDIxZTNmZDZiZGUx"
+  ],
+  "application-id": 775454711,
+  "box-references": [],
+  "foreign-apps": [],
+  "foreign-assets": [],
+  "global-state-schema": {
+   "num-byte-slice": 0,
+   "num-uint": 0
+  },
+  "local-state-schema": {
+   "num-byte-slice": 0,
+   "num-uint": 0
+  },
+  "on-completion": "noop"
+ },
+ "close-rewards": 0,
+ "closing-amount": 0,
+ "confirmed-round": 68934831,
+ "fee": 1000,
+ "first-valid": 68934829,
+ "genesis-hash": "SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=",
+ "genesis-id": "testnet-v1.0",
+ "id": "BZES4ILQZAMFIQ6IIIOITC2OLNCIGWMR6TUPPP3TOH7YRTFFHVMA",
+ "inner-txns": [
+  {
+   "close-rewards": 0,
+   "closing-amount": 0,
+   "confirmed-round": 68934831,
+   "fee": 1000,
+   "first-valid": 68934829,
+   "intra-round-offset": 0,
+   "last-valid": 68935829,
+   "payment-transaction": {
+    "amount": 1000,
+    "close-amount": 0,
+    "receiver": "OJVSSLTPZGBA6J3EWKTVMRJYTPEI3BNPCQBZ6YHJZT6YZO4D6AYKTTNMFQ"
+   },
+   "receiver-rewards": 0,
+   "round-time": 1793806803,
+   "sender": "JZD4E5AGJ466UZTDSR3HTHQO2RHNCSBWHFQIBT2BLQ4FWAP4GPFR4BODPU",
+   "sender-rewards": 0,
+   "tx-type": "pay"
+  }
+ ],
+ "intra-round-offset": 0,
+ "last-valid": 68935829,
+ "receiver-rewards": 0,
+ "round-time": 1793806803,
+ "sender": "OJVSSLTPZGBA6J3EWKTVMRJYTPEI3BNPCQBZ6YHJZT6YZO4D6AYKTTNMFQ",
+ "sender-rewards": 0,
+ "tx-type": "appl"
+}
