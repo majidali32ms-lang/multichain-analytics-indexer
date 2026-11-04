@@ -45,7 +45,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: uv sync --locked --python 3.11
+      - run: uv sync --locked --python 3.11 --group docs
       - run: uv run mkdocs build --strict
 
   package:

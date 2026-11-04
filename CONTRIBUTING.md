@@ -34,6 +34,13 @@ uv run pytest -m live --no-cov
 - Use each chain's own SDK for addresses and encoding. Do not re-implement them.
 - Test the failure paths too: bad input, timeouts, rate limits, malformed responses.
 
+To build the docs site:
+
+```bash
+uv sync --group docs
+uv run mkdocs build --strict
+```
+
 ## Adding fixtures
 
 Fixtures in `tests/fixtures/` are real responses from a test network, with notes and

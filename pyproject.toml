@@ -45,8 +45,6 @@ multichain-indexer = "multichain_indexer.cli:main"
 dev = [
     "build",
     "ipykernel",
-    "mkdocs-material",
-    "mkdocstrings[python]",
     "mypy",
     "nbclient",
     "nbformat",
@@ -56,6 +54,10 @@ dev = [
     "pytest-cov",
     "ruff",
     "twine",
+]
+docs = [
+    "mkdocs-material",
+    "mkdocstrings[python]",
 ]
 
 [tool.hatch.build.targets.wheel]
