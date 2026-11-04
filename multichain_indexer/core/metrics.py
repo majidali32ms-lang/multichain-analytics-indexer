@@ -9,7 +9,17 @@ from pydantic import JsonValue
 
 from multichain_indexer.core.models import MetricsReport, Status, TransactionRecord
 
-SHARED_COLUMNS = ("id", "time", "sender", "receiver", "amount", "fee", "status", "chain")
+SHARED_COLUMNS = (
+    "id",
+    "time",
+    "sender",
+    "receiver",
+    "amount",
+    "fee",
+    "status",
+    "chain",
+    "network",
+)
 
 
 def transactions_frame(records: Sequence[TransactionRecord]) -> pd.DataFrame:

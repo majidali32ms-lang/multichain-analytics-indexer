@@ -10,6 +10,7 @@ from __future__ import annotations
 import sqlite3
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -60,7 +61,10 @@ CREATE TABLE IF NOT EXISTS sync_state (
     chain TEXT NOT NULL,
     network TEXT NOT NULL,
     account TEXT NOT NULL,
-    checkpoint INTEGER NOT NULL,
+    checkpoint INTEGER,
+    backfill_from INTEGER,
+    backfill_to INTEGER,
+    backfill_cursor TEXT,
     PRIMARY KEY (chain, network, account)
 );
 """
@@ -80,7 +84,8 @@ ON CONFLICT (chain, network, tx_id) DO UPDATE SET
 """
 
 _SELECT_TRANSACTIONS = """
-SELECT t.tx_id, t.time, t.sender, t.receiver, t.amount, t.fee, t.status, t.chain, t.native
+SELECT t.tx_id, t.time, t.sender, t.receiver, t.amount, t.fee, t.status, t.chain, t.network,
+       t.native
 FROM transactions t
 """
 
@@ -89,15 +94,67 @@ JOIN account_transactions a
   ON a.chain = t.chain AND a.network = t.network AND a.tx_id = t.tx_id AND a.account = ?
 """
 
+_SAVE_BACKFILL = """
+INSERT INTO sync_state (chain, network, account, backfill_from, backfill_to, backfill_cursor)
+VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT (chain, network, account) DO UPDATE SET
+    backfill_from = excluded.backfill_from,
+    backfill_to = excluded.backfill_to,
+    backfill_cursor = excluded.backfill_cursor
+"""
+
+_FINISH_SYNC = """
+INSERT INTO sync_state (chain, network, account, checkpoint)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (chain, network, account) DO UPDATE SET
+    checkpoint = excluded.checkpoint,
+    backfill_from = NULL,
+    backfill_to = NULL,
+    backfill_cursor = NULL
+"""
+
+_LOAD_SYNC_STATE = """
+SELECT checkpoint, backfill_from, backfill_to, backfill_cursor
+FROM sync_state
+WHERE chain = ? AND network = ? AND account = ?
+"""
+
+
+@dataclass(frozen=True)
+class Backfill:
+    """A sync in progress: the range of heights it covers and the next page to fetch."""
+
+    from_height: int | None
+    to_height: int
+    cursor: str | None
+
+
+@dataclass(frozen=True)
+class SyncState:
+    """How far an account has been synced, and any sync left unfinished."""
+
+    checkpoint: int | None = None
+    backfill: Backfill | None = None
+
 
 class Storage(ABC):
     """Everything the pipeline needs from a database."""
 
     @abstractmethod
     def save_transactions(
-        self, network: str, account: str, records: Iterable[TransactionRecord]
+        self,
+        chain: str,
+        network: str,
+        account: str,
+        records: Iterable[TransactionRecord],
+        *,
+        backfill: Backfill | None = None,
     ) -> int:
-        """Upsert records and link them to ``account``; return how many were given."""
+        """Upsert records, link them to ``account`` and return how many were given.
+
+        When ``backfill`` is given it is saved in the same database transaction, so a
+        crash can never leave the cursor ahead of the records it stands for.
+        """
 
     @abstractmethod
     def load_transactions(
@@ -112,17 +169,15 @@ class Storage(ABC):
         """Return stored transactions, newest first."""
 
     @abstractmethod
-    def save_snapshot(
-        self, network: str, record: AccountRecord | AssetRecord | ContractRecord
-    ) -> None:
+    def save_snapshot(self, record: AccountRecord | AssetRecord | ContractRecord) -> None:
         """Keep the latest state of an account, asset or contract."""
 
     @abstractmethod
-    def load_checkpoint(self, chain: str, network: str, account: str) -> int | None:
-        """Return the last fully synced height for ``account``, if any."""
+    def load_sync_state(self, chain: str, network: str, account: str) -> SyncState:
+        """Return the checkpoint and any unfinished sync for ``account``."""
 
     @abstractmethod
-    def save_checkpoint(self, chain: str, network: str, account: str, height: int) -> None:
+    def finish_sync(self, chain: str, network: str, account: str, height: int) -> None:
         """Record that ``account`` is fully synced up to ``height``."""
 
     @abstractmethod
@@ -137,17 +192,35 @@ class SQLiteStorage(Storage):
         self._connection.executescript(_SCHEMA)
 
     def save_transactions(
-        self, network: str, account: str, records: Iterable[TransactionRecord]
+        self,
+        chain: str,
+        network: str,
+        account: str,
+        records: Iterable[TransactionRecord],
+        *,
+        backfill: Backfill | None = None,
     ) -> int:
         saved = 0
         with self._connection:
             for record in records:
-                self._connection.execute(_UPSERT_TRANSACTION, _transaction_row(network, record))
+                self._connection.execute(_UPSERT_TRANSACTION, _transaction_row(record))
                 self._connection.execute(
                     "INSERT OR IGNORE INTO account_transactions VALUES (?, ?, ?, ?)",
-                    (record.chain, network, account, record.id),
+                    (chain, network, account, record.id),
                 )
                 saved += 1
+            if backfill is not None:
+                self._connection.execute(
+                    _SAVE_BACKFILL,
+                    (
+                        chain,
+                        network,
+                        account,
+                        backfill.from_height,
+                        backfill.to_height,
+                        backfill.cursor,
+                    ),
+                )
         return saved
 
     def load_transactions(
@@ -173,38 +246,40 @@ class SQLiteStorage(Storage):
         rows = self._connection.execute(query, arguments).fetchall()
         return [_transaction_from_row(row, native_model) for row in rows]
 
-    def save_snapshot(
-        self, network: str, record: AccountRecord | AssetRecord | ContractRecord
-    ) -> None:
+    def save_snapshot(self, record: AccountRecord | AssetRecord | ContractRecord) -> None:
         item_id = record.address if isinstance(record, AccountRecord) else record.id
         with self._connection:
             self._connection.execute(
                 "INSERT OR REPLACE INTO snapshots VALUES (?, ?, ?, ?, ?)",
-                (record.chain, network, type(record).__name__, item_id, record.model_dump_json()),
+                (
+                    record.chain,
+                    record.network,
+                    type(record).__name__,
+                    item_id,
+                    record.model_dump_json(),
+                ),
             )
 
-    def load_checkpoint(self, chain: str, network: str, account: str) -> int | None:
-        row = self._connection.execute(
-            "SELECT checkpoint FROM sync_state WHERE chain = ? AND network = ? AND account = ?",
-            (chain, network, account),
-        ).fetchone()
-        return None if row is None else int(row[0])
+    def load_sync_state(self, chain: str, network: str, account: str) -> SyncState:
+        row = self._connection.execute(_LOAD_SYNC_STATE, (chain, network, account)).fetchone()
+        if row is None:
+            return SyncState()
+        checkpoint, backfill_from, backfill_to, cursor = row
+        backfill = None if backfill_to is None else Backfill(backfill_from, backfill_to, cursor)
+        return SyncState(checkpoint=checkpoint, backfill=backfill)
 
-    def save_checkpoint(self, chain: str, network: str, account: str, height: int) -> None:
+    def finish_sync(self, chain: str, network: str, account: str, height: int) -> None:
         with self._connection:
-            self._connection.execute(
-                "INSERT OR REPLACE INTO sync_state VALUES (?, ?, ?, ?)",
-                (chain, network, account, height),
-            )
+            self._connection.execute(_FINISH_SYNC, (chain, network, account, height))
 
     def close(self) -> None:
         self._connection.close()
 
 
-def _transaction_row(network: str, record: TransactionRecord) -> tuple[str | None, ...]:
+def _transaction_row(record: TransactionRecord) -> tuple[str | None, ...]:
     return (
         record.chain,
-        network,
+        record.network,
         record.id,
         record.time.isoformat(),
         record.sender,
@@ -219,7 +294,7 @@ def _transaction_row(network: str, record: TransactionRecord) -> tuple[str | Non
 def _transaction_from_row(
     row: tuple[str, ...], native_model: type[NativeData]
 ) -> TransactionRecord:
-    tx_id, time, sender, receiver, amount, fee, status, chain, native = row
+    tx_id, time, sender, receiver, amount, fee, status, chain, network, native = row
     return TransactionRecord(
         id=tx_id,
         time=datetime.fromisoformat(time),
@@ -229,5 +304,6 @@ def _transaction_from_row(
         fee=int(fee),
         status=Status(status),
         chain=chain,
+        network=network,
         native=native_model.model_validate_json(native),
     )

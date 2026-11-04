@@ -198,17 +198,19 @@ def parse_transaction(body: JsonObject, network: str) -> TransactionRecord:
         # A transaction that fails is never written to a block on Algorand.
         status=Status.FINAL,
         chain=CHAIN,
+        network=network,
         native=AlgorandTransaction(**_native_fields(raw, raw.confirmed_round, raw.id)),
     )
 
 
-def parse_account(body: JsonObject) -> AccountRecord:
+def parse_account(body: JsonObject, network: str) -> AccountRecord:
     """Normalise an ``/v2/accounts/{address}`` response."""
     raw = _validate(_RawAccount, body.get("account"), "account")
     return AccountRecord(
         address=raw.address,
         balance=raw.amount,
         chain=CHAIN,
+        network=network,
         native=AlgorandAccount(
             round=raw.round,
             participation_status=raw.status,
@@ -228,7 +230,7 @@ def parse_account(body: JsonObject) -> AccountRecord:
     )
 
 
-def parse_asset(body: JsonObject) -> AssetRecord:
+def parse_asset(body: JsonObject, network: str) -> AssetRecord:
     """Normalise an ``/v2/assets/{id}`` response."""
     raw = _validate(_RawAsset, body.get("asset"), "asset")
     params = raw.params
@@ -240,6 +242,7 @@ def parse_asset(body: JsonObject) -> AssetRecord:
         total=params.total,
         creator=params.creator,
         chain=CHAIN,
+        network=network,
         native=AlgorandAsset(
             url=params.url,
             manager=params.manager,
@@ -252,7 +255,7 @@ def parse_asset(body: JsonObject) -> AssetRecord:
     )
 
 
-def parse_application(body: JsonObject) -> ContractRecord:
+def parse_application(body: JsonObject, network: str) -> ContractRecord:
     """Normalise an ``/v2/applications/{id}`` response."""
     raw = _validate(_RawApplication, body.get("application"), "application")
     params = raw.params
@@ -260,6 +263,7 @@ def parse_application(body: JsonObject) -> ContractRecord:
         id=str(raw.id),
         creator=params.creator,
         chain=CHAIN,
+        network=network,
         native=AlgorandApplication(
             created_at_round=raw.created_at_round,
             global_uints=params.global_state_schema.num_uint,

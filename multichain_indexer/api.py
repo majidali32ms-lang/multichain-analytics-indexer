@@ -79,7 +79,7 @@ class AsyncIndexer:
     async def account(self, address: str) -> AccountRecord:
         """Fetch an account's current state and store it."""
         record = await self._indexer.fetch_account(address)
-        self._storage.save_snapshot(self.network, record)
+        self._storage.save_snapshot(record)
         return record
 
     async def account_transactions(
@@ -90,7 +90,7 @@ class AsyncIndexer:
             raise InvalidInput("limit must be at least 1")
         collected: list[TransactionRecord] = []
         async for page in self._indexer.iter_account_transactions(address):
-            collected.extend(page)
+            collected.extend(page.records)
             if len(collected) >= limit:
                 break
         return collected[:limit]
@@ -98,13 +98,13 @@ class AsyncIndexer:
     async def asset(self, asset_id: str | int) -> AssetRecord:
         """Fetch a token or asset, such as an Algorand ASA, and store it."""
         record = await self._indexer.fetch_asset(str(asset_id))
-        self._storage.save_snapshot(self.network, record)
+        self._storage.save_snapshot(record)
         return record
 
     async def contract(self, contract_id: str | int) -> ContractRecord:
         """Fetch an application or contract, such as an Algorand app, and store it."""
         record = await self._indexer.fetch_contract(str(contract_id))
-        self._storage.save_snapshot(self.network, record)
+        self._storage.save_snapshot(record)
         return record
 
     async def sync(
@@ -179,7 +179,12 @@ class _LoopThread:
         self._thread.start()
 
     def run(self, coroutine: Coroutine[object, object, _T]) -> _T:
-        return asyncio.run_coroutine_threadsafe(coroutine, self._loop).result()
+        future = asyncio.run_coroutine_threadsafe(coroutine, self._loop)
+        try:
+            return future.result()
+        except KeyboardInterrupt:
+            future.cancel()
+            raise
 
     def call(self, function: Callable[[], _T]) -> _T:
         async def invoke() -> _T:

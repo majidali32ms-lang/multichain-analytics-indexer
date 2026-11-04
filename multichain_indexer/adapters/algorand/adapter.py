@@ -32,6 +32,7 @@ from multichain_indexer.core.models import (
     AccountRecord,
     AssetRecord,
     ContractRecord,
+    TransactionPage,
     TransactionRecord,
 )
 from multichain_indexer.core.ratelimit import RateLimiter
@@ -72,25 +73,36 @@ class AlgorandIndexer(BaseIndexer):
         return address
 
     async def fetch_account(self, address: str) -> AccountRecord:
-        return parse_account(await self._api.account(self.validate_address(address)))
+        return parse_account(await self._api.account(self.validate_address(address)), self.network)
 
     async def fetch_asset(self, asset_id: str) -> AssetRecord:
-        return parse_asset(await self._api.asset(_parse_id(asset_id, "ASA ID")))
+        body = await self._api.asset(_parse_id(asset_id, "ASA ID"))
+        return parse_asset(body, self.network)
 
     async def fetch_contract(self, contract_id: str) -> ContractRecord:
-        return parse_application(await self._api.application(_parse_id(contract_id, "app ID")))
+        body = await self._api.application(_parse_id(contract_id, "app ID"))
+        return parse_application(body, self.network)
 
     async def chain_head(self) -> int:
         return await self._api.latest_round()
 
     async def iter_account_transactions(
-        self, address: str, *, from_height: int | None = None, to_height: int | None = None
-    ) -> AsyncIterator[list[TransactionRecord]]:
+        self,
+        address: str,
+        *,
+        from_height: int | None = None,
+        to_height: int | None = None,
+        cursor: str | None = None,
+    ) -> AsyncIterator[TransactionPage]:
         pages = self._api.account_transaction_pages(
-            self.validate_address(address), min_round=from_height, max_round=to_height
+            self.validate_address(address),
+            min_round=from_height,
+            max_round=to_height,
+            next_token=cursor,
         )
-        async for page in pages:
-            yield [parse_transaction(item, self.network) for item in page]
+        async for transactions, next_token in pages:
+            records = tuple(parse_transaction(item, self.network) for item in transactions)
+            yield TransactionPage(records=records, next_cursor=next_token)
 
     def chain_metrics(self, records: Sequence[TransactionRecord]) -> dict[str, JsonValue]:
         return algorand_metrics(records)

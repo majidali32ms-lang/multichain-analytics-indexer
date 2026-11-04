@@ -21,6 +21,7 @@ from multichain_indexer.core.models import (
     NativeData,
     Status,
     SyncResult,
+    TransactionPage,
     TransactionRecord,
 )
 
@@ -44,6 +45,7 @@ __all__ = [
     "RateLimited",
     "Status",
     "SyncResult",
+    "TransactionPage",
     "TransactionRecord",
     "UnsupportedChain",
     "WrongNetwork",

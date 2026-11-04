@@ -41,13 +41,22 @@ class TransactionRecord(_Record):
     fee: int = Field(ge=0)
     status: Status
     chain: str = Field(min_length=1)
+    network: str = Field(min_length=1)
     native: SerializeAsAny[NativeData]
+
+
+class TransactionPage(_Record):
+    """One page of an account's history and the cursor for the next, if there is one."""
+
+    records: tuple[TransactionRecord, ...]
+    next_cursor: str | None = None
 
 
 class AccountRecord(_Record):
     address: str = Field(min_length=1)
     balance: int = Field(ge=0)
     chain: str = Field(min_length=1)
+    network: str = Field(min_length=1)
     native: SerializeAsAny[NativeData]
 
 
@@ -59,6 +68,7 @@ class AssetRecord(_Record):
     total: int = Field(ge=0)
     creator: str = Field(min_length=1)
     chain: str = Field(min_length=1)
+    network: str = Field(min_length=1)
     native: SerializeAsAny[NativeData]
 
 
@@ -66,6 +76,7 @@ class ContractRecord(_Record):
     id: str = Field(min_length=1)
     creator: str = Field(min_length=1)
     chain: str = Field(min_length=1)
+    network: str = Field(min_length=1)
     native: SerializeAsAny[NativeData]
 
 
@@ -77,6 +88,7 @@ class SyncResult(_Record):
     account: str
     from_height: int | None
     to_height: int
+    resumed: bool
     records_fetched: int = Field(ge=0)
     requests_made: int = Field(ge=0)
     elapsed_seconds: float = Field(ge=0)

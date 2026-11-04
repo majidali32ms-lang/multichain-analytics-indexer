@@ -210,8 +210,9 @@ def _transaction_line(indexer: Indexer, record: TransactionRecord) -> str:
 
 
 def _sync_summary(result: SyncResult) -> str:
+    verb = "Resumed and synced" if result.resumed else "Synced"
     return (
-        f"Synced {result.account} on {result.chain} {result.network}: "
+        f"{verb} {result.account} on {result.chain} {result.network}: "
         f"{result.records_fetched} transactions up to height {result.to_height}, "
         f"{result.requests_made} requests in {result.elapsed_seconds:.1f}s"
     )

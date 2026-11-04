@@ -2,7 +2,7 @@
 
 Requests go through ``ApiClient`` rather than the SDK's ``IndexerClient``, which blocks
 the event loop and drops the HTTP status, so a rate limit could not be told from any
-other failure. The SDK is still used for address validation.
+other failure. The SDK is still used for address validation and encoding.
 """
 
 from __future__ import annotations
@@ -40,9 +40,14 @@ class IndexerApi:
         return await self._client.get_json(f"/v2/applications/{app_id}")
 
     async def account_transaction_pages(
-        self, address: str, *, min_round: int | None, max_round: int | None
-    ) -> AsyncIterator[list[JsonObject]]:
-        """Yield pages until the Indexer stops returning a ``next-token``.
+        self,
+        address: str,
+        *,
+        min_round: int | None,
+        max_round: int | None,
+        next_token: str | None = None,
+    ) -> AsyncIterator[tuple[list[JsonObject], str | None]]:
+        """Yield each page with its ``next-token``, until the Indexer stops returning one.
 
         A last page can still carry a token and an empty list, so an empty page also
         ends the walk.
@@ -52,6 +57,8 @@ class IndexerApi:
             params["min-round"] = min_round
         if max_round is not None:
             params["max-round"] = max_round
+        if next_token is not None:
+            params["next"] = next_token
 
         path = f"/v2/accounts/{address}/transactions"
         while True:
@@ -60,11 +67,12 @@ class IndexerApi:
             transactions = _transactions_of(page, path)
             if not transactions:
                 return
-            yield transactions
-            next_token = page.get("next-token")
-            if not isinstance(next_token, str) or not next_token:
+            token = page.get("next-token")
+            following = token if isinstance(token, str) and token else None
+            yield transactions, following
+            if following is None:
                 return
-            params["next"] = next_token
+            params["next"] = following
 
     async def aclose(self) -> None:
         await self._client.aclose()

@@ -15,6 +15,7 @@ from multichain_indexer.core.models import (
     AssetRecord,
     ContractRecord,
     NativeData,
+    TransactionPage,
     TransactionRecord,
 )
 
@@ -74,9 +75,22 @@ class BaseIndexer(ABC):
 
     @abstractmethod
     def iter_account_transactions(
-        self, address: str, *, from_height: int | None = None, to_height: int | None = None
-    ) -> AsyncIterator[list[TransactionRecord]]:
-        """Yield an account's transactions one page at a time, newest first."""
+        self,
+        address: str,
+        *,
+        from_height: int | None = None,
+        to_height: int | None = None,
+        cursor: str | None = None,
+    ) -> AsyncIterator[TransactionPage]:
+        """Yield an account's transactions one page at a time, newest first.
+
+        Args:
+            address: The account.
+            from_height: Oldest height to include.
+            to_height: Newest height to include.
+            cursor: ``next_cursor`` of an earlier page with the same range, to continue
+                from where that page ended.
+        """
 
     @abstractmethod
     def chain_metrics(self, records: Sequence[TransactionRecord]) -> dict[str, JsonValue]:
