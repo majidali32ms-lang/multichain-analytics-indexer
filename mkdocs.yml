@@ -1,0 +1,14 @@
+site_name: multichain-analytics-indexer
+theme:
+  name: material
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: false
+nav:
+  - Home: index.md
+  - Algorand: chains/algorand.md
+  - Python API: api.md
