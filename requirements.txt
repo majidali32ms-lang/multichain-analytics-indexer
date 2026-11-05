@@ -11,6 +11,8 @@ annotated-types==0.8.0
     # via pydantic
 attrs==26.1.0
     # via aiohttp
+base58==2.1.1
+    # via multichain-analytics-indexer
 cffi==2.1.1 ; platform_python_implementation != 'PyPy'
     # via pynacl
 click==8.5.0
@@ -21,6 +23,8 @@ frozenlist==1.8.0
     #   aiosignal
 idna==3.20
     # via yarl
+jsonalias==0.1.1
+    # via solders
 msgpack==1.2.4
     # via py-algorand-sdk
 multidict==7.2.1
@@ -45,15 +49,17 @@ pycparser==3.12 ; implementation_name != 'PyPy' and platform_python_implementati
     # via cffi
 pycryptodomex==3.24.1
     # via py-algorand-sdk
-pydantic==2.14.2
+pydantic==2.14.3
     # via multichain-analytics-indexer
-pydantic-core==2.50.2
+pydantic-core==2.50.4
     # via pydantic
 pynacl==1.6.2
     # via py-algorand-sdk
 python-dateutil==4.0.0
     # via pandas
 python-dotenv==1.2.4
+    # via multichain-analytics-indexer
+solders==0.29.0
     # via multichain-analytics-indexer
 typing-extensions==4.16.0
     # via
@@ -62,6 +68,7 @@ typing-extensions==4.16.0
     #   py-algorand-sdk
     #   pydantic
     #   pydantic-core
+    #   solders
     #   typing-inspection
 typing-inspection==0.4.5
     # via pydantic
