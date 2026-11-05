@@ -44,7 +44,9 @@ uv run mkdocs build --strict
 ## Adding fixtures
 
 Fixtures in `tests/fixtures/` are real responses from a test network, with notes and
-signatures removed. `scripts/capture_algorand_fixtures.py` regenerates Algorand's.
+signatures removed, and program logs and memos removed from Solana's.
+`scripts/capture_algorand_fixtures.py` and `scripts/capture_solana_fixtures.py`
+regenerate them.
 
 ## Conduct
 

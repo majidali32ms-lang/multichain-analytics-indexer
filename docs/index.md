@@ -3,7 +3,7 @@
 A Python library and command line for indexing and analysing blockchain accounts and
 transactions, in each chain's own terms.
 
-This version supports [Algorand](chains/algorand.md).
+This version supports [Algorand](chains/algorand.md) and [Solana](chains/solana.md).
 
 ## Install
 

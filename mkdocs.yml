@@ -11,4 +11,5 @@ plugins:
 nav:
   - Home: index.md
   - Algorand: chains/algorand.md
+  - Solana: chains/solana.md
   - Python API: api.md
