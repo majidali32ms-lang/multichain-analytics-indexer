@@ -16,7 +16,14 @@ from multichain_indexer.core.config import Settings
 from multichain_indexer.core.errors import ConfigError, InvalidInput, UnsupportedChain
 from multichain_indexer.core.export import export_transactions
 from multichain_indexer.core.metrics import build_report, transactions_frame
-from multichain_indexer.core.models import AccountRecord, NativeData, Status, TransactionRecord
+from multichain_indexer.core.models import (
+    AccountRecord,
+    AssetRecord,
+    ContractRecord,
+    NativeData,
+    Status,
+    TransactionRecord,
+)
 from multichain_indexer.core.observability import (
     JsonFormatter,
     RedactingFilter,
@@ -55,6 +62,15 @@ def transaction(
         network=network,
         native=ToyNative(),
     )
+
+
+def test_assets_and_contracts_may_have_no_creator() -> None:
+    asset = AssetRecord(
+        id="mint", decimals=0, total=1, chain="toy", network="testnet", native=ToyNative()
+    )
+    contract = ContractRecord(id="program", chain="toy", network="testnet", native=ToyNative())
+    assert asset.creator is None
+    assert contract.creator is None
 
 
 def test_records_reject_negative_amounts_and_naive_times() -> None:
@@ -307,6 +323,6 @@ def test_format_native_trims_trailing_zeros() -> None:
 
 def test_registry_reports_planned_and_unknown_chains() -> None:
     with pytest.raises(UnsupportedChain, match="later version"):
-        create_indexer("solana", None, Settings())
+        create_indexer("near", None, Settings())
     with pytest.raises(UnsupportedChain, match="unknown chain"):
         create_indexer("dogechain", None, Settings())

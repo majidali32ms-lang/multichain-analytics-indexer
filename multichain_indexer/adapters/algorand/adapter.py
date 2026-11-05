@@ -195,7 +195,7 @@ def _describe_asset(record: AssetRecord) -> dict[str, str]:
         "Unit": record.unit or "none",
         "Decimals": str(record.decimals),
         "Total": f"{record.total} base units",
-        "Creator": record.creator,
+        "Creator": record.creator or "none",
         "Manager": native.manager or "none",
         "Clawback": native.clawback or "none",
         "Freeze": native.freeze or "none",
@@ -207,7 +207,7 @@ def _describe_application(record: ContractRecord) -> dict[str, str]:
     native = cast(AlgorandApplication, record.native)
     return {
         "App ID": record.id,
-        "Creator": record.creator,
+        "Creator": record.creator or "none",
         "Created at round": str(native.created_at_round),
         "Global state": f"{native.global_uints} uints, {native.global_byte_slices} byte slices",
         "Local state": f"{native.local_uints} uints, {native.local_byte_slices} byte slices",
