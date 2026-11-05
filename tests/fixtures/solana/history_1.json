@@ -1,0 +1,103 @@
+{
+ "blockTime": 1793898469,
+ "meta": {
+  "computeUnitsConsumed": 19707,
+  "costUnits": 22341,
+  "err": null,
+  "fee": 5000,
+  "innerInstructions": [],
+  "postBalances": [
+   1004149720,
+   31440490,
+   650240,
+   650240,
+   833120,
+   3764280,
+   1422400
+  ],
+  "postTokenBalances": [],
+  "preBalances": [
+   1004154720,
+   30292410,
+   1214120,
+   1234440,
+   833120,
+   3764280,
+   1422400
+  ],
+  "preTokenBalances": [],
+  "rewards": [],
+  "status": {
+   "Ok": null
+  }
+ },
+ "slot": 519008282,
+ "transaction": {
+  "message": {
+   "accountKeys": [
+    {
+     "pubkey": "FK9fAcg4qm5Airz6GC4EW3mt7XWKHZi5eJx3ipDDw5Tv",
+     "signer": true,
+     "source": "transaction",
+     "writable": true
+    },
+    {
+     "pubkey": "BCBnuxawDt1LruLqw4pEQ8hfVSxEJnmTSQy4hzU5iWCG",
+     "signer": false,
+     "source": "transaction",
+     "writable": true
+    },
+    {
+     "pubkey": "Esg2H1VgpYyS6jKgpKv2XEdKg6THcw4rCXpKNJm3aizg",
+     "signer": false,
+     "source": "transaction",
+     "writable": true
+    },
+    {
+     "pubkey": "F2sP3NETyqNM62oi1P9f2nvwbManZ6xPNsKCMNQNHvFy",
+     "signer": false,
+     "source": "transaction",
+     "writable": true
+    },
+    {
+     "pubkey": "2utyzv8LsLbCEtPVgXE4r2vqCXBCB9EfwYUk3SGkFMs9",
+     "signer": false,
+     "source": "transaction",
+     "writable": false
+    },
+    {
+     "pubkey": "FwcsNmTLbf8VVqxuBMjEDTh39gXR87n3vAnAwvAiPtRy",
+     "signer": false,
+     "source": "transaction",
+     "writable": false
+    },
+    {
+     "pubkey": "J4JA5ToPxN1qLjm5MpCzFkJBhqjY6Qwz97k4i63LFX2d",
+     "signer": false,
+     "source": "transaction",
+     "writable": false
+    }
+   ],
+   "instructions": [
+    {
+     "accounts": [
+      "FwcsNmTLbf8VVqxuBMjEDTh39gXR87n3vAnAwvAiPtRy",
+      "Esg2H1VgpYyS6jKgpKv2XEdKg6THcw4rCXpKNJm3aizg",
+      "F2sP3NETyqNM62oi1P9f2nvwbManZ6xPNsKCMNQNHvFy",
+      "J4JA5ToPxN1qLjm5MpCzFkJBhqjY6Qwz97k4i63LFX2d",
+      "BCBnuxawDt1LruLqw4pEQ8hfVSxEJnmTSQy4hzU5iWCG"
+     ],
+     "data": "P9is2CMgdPE",
+     "programId": "2utyzv8LsLbCEtPVgXE4r2vqCXBCB9EfwYUk3SGkFMs9",
+     "stackHeight": 1
+    }
+   ],
+   "recentBlockhash": "GxtBMbauhdzYVZKpfbbn6bpkfSe5yNiQtZCg5hVhgHxa"
+  },
+  "signatures": [
+   "3jxmuXo1xK3F7s5w5bRXyHEakWkgHTDc4VEGXQ2RQWNP6hgja6C9WrHgGGs2kcPXiEcyi5eW8bV9kV8SHu99ofTR"
+  ]
+ },
+ "transactionIndex": 7,
+ "version": "legacy"
+}
