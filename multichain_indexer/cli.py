@@ -13,7 +13,7 @@ import click
 
 from multichain_indexer.api import Indexer
 from multichain_indexer.core.config import Settings
-from multichain_indexer.core.errors import IndexerError
+from multichain_indexer.core.errors import IndexerError, InvalidInput
 from multichain_indexer.core.export import EXPORT_FORMATS
 from multichain_indexer.core.models import SyncResult, TransactionRecord
 from multichain_indexer.core.observability import configure_logging
@@ -72,8 +72,8 @@ def _with_indexer(
 )
 @click.option(
     "--network",
-    type=click.Choice(["mainnet", "testnet", "localnet"]),
-    help="Network to read. Defaults to the chain's test network.",
+    type=click.Choice(["mainnet", "testnet", "devnet", "localnet"]),
+    help="Network to read. Defaults to Algorand testnet or Solana devnet.",
 )
 @click.option("--db", "database", type=click.Path(dir_okay=False, path_type=Path))
 @click.option("--env-file", default=".env", show_default=True)
@@ -100,7 +100,7 @@ def cli(
 
 @cli.group()
 def index() -> None:
-    """Look up one account, ASA or app on the node."""
+    """Look up one account, Algorand ASA or app, or Solana SPL token or program."""
 
 
 @index.command("account")
@@ -115,7 +115,7 @@ def index() -> None:
 @click.pass_obj
 @_with_indexer
 def index_account(indexer: Indexer, address: str, limit: int) -> None:
-    """Show an account's state, balances in Algo, and its recent transactions."""
+    """Show an account's state, balance in ALGO or SOL, and its recent transactions."""
     _echo_fields(indexer.describe(indexer.account(address)))
     click.echo()
     for record in indexer.account_transactions(address, limit=limit):
@@ -127,8 +127,19 @@ def index_account(indexer: Indexer, address: str, limit: int) -> None:
 @click.pass_obj
 @_with_indexer
 def index_asset(indexer: Indexer, asa_id: str) -> None:
-    """Show an ASA by its ASA ID."""
+    """Show an Algorand ASA by its ASA ID."""
+    _require_chain(indexer, "algorand", "index asset")
     _echo_fields(indexer.describe(indexer.asset(asa_id)))
+
+
+@index.command("token")
+@click.argument("mint")
+@click.pass_obj
+@_with_indexer
+def index_token(indexer: Indexer, mint: str) -> None:
+    """Show a Solana SPL Token or Token-2022 mint."""
+    _require_chain(indexer, "solana", "index token")
+    _echo_fields(indexer.describe(indexer.asset(mint)))
 
 
 @index.command("app")
@@ -136,8 +147,19 @@ def index_asset(indexer: Indexer, asa_id: str) -> None:
 @click.pass_obj
 @_with_indexer
 def index_app(indexer: Indexer, app_id: str) -> None:
-    """Show an application by its app ID."""
+    """Show an Algorand application by its app ID."""
+    _require_chain(indexer, "algorand", "index app")
     _echo_fields(indexer.describe(indexer.contract(app_id)))
+
+
+@index.command("program")
+@click.argument("program_id")
+@click.pass_obj
+@_with_indexer
+def index_program(indexer: Indexer, program_id: str) -> None:
+    """Show a Solana program by its program ID."""
+    _require_chain(indexer, "solana", "index program")
+    _echo_fields(indexer.describe(indexer.contract(program_id)))
 
 
 @cli.command()
@@ -196,6 +218,11 @@ def export(
 
 def main() -> None:
     cli()
+
+
+def _require_chain(indexer: Indexer, chain: str, command: str) -> None:
+    if indexer.profile.name != chain:
+        raise InvalidInput(f"{command} is for {chain}, not {indexer.profile.name}")
 
 
 def _echo_fields(fields: dict[str, str]) -> None:
