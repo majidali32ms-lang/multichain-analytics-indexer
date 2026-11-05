@@ -66,7 +66,7 @@ class AssetRecord(_Record):
     unit: str | None = None
     decimals: int = Field(ge=0)
     total: int = Field(ge=0)
-    creator: str = Field(min_length=1)
+    creator: str | None = Field(default=None, min_length=1)
     chain: str = Field(min_length=1)
     network: str = Field(min_length=1)
     native: SerializeAsAny[NativeData]
@@ -74,7 +74,7 @@ class AssetRecord(_Record):
 
 class ContractRecord(_Record):
     id: str = Field(min_length=1)
-    creator: str = Field(min_length=1)
+    creator: str | None = Field(default=None, min_length=1)
     chain: str = Field(min_length=1)
     network: str = Field(min_length=1)
     native: SerializeAsAny[NativeData]

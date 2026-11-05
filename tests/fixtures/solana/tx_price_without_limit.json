@@ -1,0 +1,83 @@
+{
+ "blockTime": 1793898452,
+ "meta": {
+  "computeUnitsConsumed": 5640,
+  "costUnits": 7063,
+  "err": null,
+  "fee": 5104,
+  "innerInstructions": [],
+  "postBalances": [
+   11927787820,
+   2484720,
+   1,
+   1141440
+  ],
+  "postTokenBalances": [],
+  "preBalances": [
+   11927792924,
+   2484720,
+   1,
+   1141440
+  ],
+  "preTokenBalances": [],
+  "rewards": [],
+  "status": {
+   "Ok": null
+  }
+ },
+ "slot": 519008213,
+ "transaction": {
+  "message": {
+   "accountKeys": [
+    {
+     "pubkey": "HP7sKuDQNwDjKXEwGvBvKc1tiYcJyAeWBR6PKPp3XRWM",
+     "signer": true,
+     "source": "transaction",
+     "writable": true
+    },
+    {
+     "pubkey": "EWpbSX8yhLYLsEF6GisFFSA5y29GMZL342KhyG7ezckv",
+     "signer": false,
+     "source": "transaction",
+     "writable": true
+    },
+    {
+     "pubkey": "ComputeBudget111111111111111111111111111111",
+     "signer": false,
+     "source": "transaction",
+     "writable": false
+    },
+    {
+     "pubkey": "EaYrsjxTmubXswzP3jVKgUhxjVW3NhbbZJDzFC8spSVN",
+     "signer": false,
+     "source": "transaction",
+     "writable": false
+    }
+   ],
+   "addressTableLookups": [],
+   "instructions": [
+    {
+     "accounts": [],
+     "data": "3wwiehrLvMaX",
+     "programId": "ComputeBudget111111111111111111111111111111",
+     "stackHeight": 1
+    },
+    {
+     "accounts": [
+      "EWpbSX8yhLYLsEF6GisFFSA5y29GMZL342KhyG7ezckv",
+      "HP7sKuDQNwDjKXEwGvBvKc1tiYcJyAeWBR6PKPp3XRWM"
+     ],
+     "data": "2ksWsh7Kt8Q5euPRLRqWoUaJNxLv5nu2MUFpjC4EgwUTLFAs73pQZduR4rgRK19QxcwpSKEqzeTKgmjhg15DVro3wD8UsXKANZ4muTXYq2EwuNGNc1YJZDaTnqdhMyqMbiubjqENdVvmofrUsXCoPDJ2Tym85Sb",
+     "programId": "EaYrsjxTmubXswzP3jVKgUhxjVW3NhbbZJDzFC8spSVN",
+     "stackHeight": 1
+    }
+   ],
+   "recentBlockhash": "9tyMLqL2f1bAknoNDJv4qWt7yzzTocYuzwVkz6sAEFeC"
+  },
+  "signatures": [
+   "4rNQeTggy6Ugj4uCXcmnPX4XgfmcHQw9MM463EX5nzpk1kkUSNyh165XW83FtBVDDRDgVu28qjXKTnzMWiFfLRuD"
+  ]
+ },
+ "transactionIndex": 15,
+ "version": 0
+}

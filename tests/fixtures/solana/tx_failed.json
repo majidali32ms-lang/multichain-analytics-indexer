@@ -1,0 +1,233 @@
+{
+ "blockTime": 1793898453,
+ "meta": {
+  "computeUnitsConsumed": 29472,
+  "costUnits": 34349,
+  "err": {
+   "InstructionError": [
+    1,
+    "ProgramFailedToComplete"
+   ]
+  },
+  "fee": 5000,
+  "innerInstructions": [],
+  "postBalances": [
+   210243038607,
+   1,
+   1141440,
+   1336320,
+   3841920,
+   31125120,
+   27594560,
+   23530560,
+   6848640,
+   24505920,
+   17205120,
+   5321170560,
+   30456960,
+   1,
+   3062400,
+   2394240
+  ],
+  "postTokenBalances": [],
+  "preBalances": [
+   210243043607,
+   1,
+   1141440,
+   1336320,
+   3841920,
+   31125120,
+   27594560,
+   23530560,
+   6848640,
+   24505920,
+   17205120,
+   5321170560,
+   30456960,
+   1,
+   3062400,
+   2394240
+  ],
+  "preTokenBalances": [],
+  "rewards": [],
+  "status": {
+   "Err": {
+    "InstructionError": [
+     1,
+     "ProgramFailedToComplete"
+    ]
+   }
+  }
+ },
+ "slot": 519008219,
+ "transaction": {
+  "message": {
+   "accountKeys": [
+    {
+     "pubkey": "8wU8YTdfpACK7Y3tgC1EcULjYCimC8qCyUBEMJDXQo6C",
+     "signer": true,
+     "source": "transaction",
+     "writable": true
+    },
+    {
+     "pubkey": "ComputeBudget111111111111111111111111111111",
+     "signer": false,
+     "source": "transaction",
+     "writable": false
+    },
+    {
+     "pubkey": "CDESjex4EDBKLwx9ZPzVbjiHEHatasb5fhSJZMzNfvw2",
+     "signer": false,
+     "source": "transaction",
+     "writable": false
+    },
+    {
+     "pubkey": "4FjSjbdSFYSru6SqBrsoHQ2S7Yd1m7Aam7K1QsUwvhhh",
+     "signer": false,
+     "source": "lookupTable",
+     "writable": true
+    },
+    {
+     "pubkey": "FteNQJbfCmsMjFWVKJqPPgVWriHKj6W5GcUUssrSxv9P",
+     "signer": false,
+     "source": "lookupTable",
+     "writable": true
+    },
+    {
+     "pubkey": "293xKa43t5saWxHsphFQ4MRav9fzfZsCw5h85vvEvFEP",
+     "signer": false,
+     "source": "lookupTable",
+     "writable": true
+    },
+    {
+     "pubkey": "3fFbcoGLNis34CjgYQY1s86voNqcrUe1CKhKmaSmC6gD",
+     "signer": false,
+     "source": "lookupTable",
+     "writable": true
+    },
+    {
+     "pubkey": "5E91EsfDVioYPGqUBfs9R8xaZc3nSzRxAQ4fNEcuC2mY",
+     "signer": false,
+     "source": "lookupTable",
+     "writable": true
+    },
+    {
+     "pubkey": "ASsHcC3NYK69UH9kFvBE5cGpgTvT9hzLyKS7igeLaU6D",
+     "signer": false,
+     "source": "lookupTable",
+     "writable": true
+    },
+    {
+     "pubkey": "DPfsaBzYjjCvXN5HFwB9sWMCdFBeHfSqW7AYGuBcZowa",
+     "signer": false,
+     "source": "lookupTable",
+     "writable": true
+    },
+    {
+     "pubkey": "Gcee8cZPXyhoELvRneQTh2dR1Ge2tpfuUxMtBFmEPTJE",
+     "signer": false,
+     "source": "lookupTable",
+     "writable": true
+    },
+    {
+     "pubkey": "HDTXGyV61EHLHGt2okzfSPU2dtvhSc4DVe5x9fuDhvmd",
+     "signer": false,
+     "source": "lookupTable",
+     "writable": true
+    },
+    {
+     "pubkey": "HVGLrm5FedaWkQQ9D1WAD56NhZ3sguGU2j96cfGGiu5q",
+     "signer": false,
+     "source": "lookupTable",
+     "writable": true
+    },
+    {
+     "pubkey": "11111111111111111111111111111111",
+     "signer": false,
+     "source": "lookupTable",
+     "writable": false
+    },
+    {
+     "pubkey": "8hiSZwe8FCeZMCPL4MJbpmTnbntdTq2UC2xfyXphrYe3",
+     "signer": false,
+     "source": "lookupTable",
+     "writable": false
+    },
+    {
+     "pubkey": "8uvpVTdEMb38Z7fGWV9aZa9cmHwDaJFwLQDeWU2AzDTb",
+     "signer": false,
+     "source": "lookupTable",
+     "writable": false
+    }
+   ],
+   "addressTableLookups": [
+    {
+     "accountKey": "A8aqSFaH6zrdMrkiSgXSo665NejSFuN9eVmNcYKaSWHz",
+     "readonlyIndexes": [
+      5,
+      1,
+      2
+     ],
+     "writableIndexes": []
+    },
+    {
+     "accountKey": "GxbZpFFnf78vVL2t6ABfQ19zWG8NooweipDZ81jeFw5K",
+     "readonlyIndexes": [],
+     "writableIndexes": [
+      2,
+      1
+     ]
+    },
+    {
+     "accountKey": "GeD1N54fC86mnbr8s29zTyRjG4vJSgzHU8T7ox5n4bgA",
+     "readonlyIndexes": [],
+     "writableIndexes": [
+      6,
+      10,
+      9,
+      12,
+      8,
+      13,
+      11,
+      7
+     ]
+    }
+   ],
+   "instructions": [
+    {
+     "accounts": [],
+     "data": "EvAtgf",
+     "programId": "ComputeBudget111111111111111111111111111111",
+     "stackHeight": 1
+    },
+    {
+     "accounts": [
+      "8wU8YTdfpACK7Y3tgC1EcULjYCimC8qCyUBEMJDXQo6C",
+      "8hiSZwe8FCeZMCPL4MJbpmTnbntdTq2UC2xfyXphrYe3",
+      "FteNQJbfCmsMjFWVKJqPPgVWriHKj6W5GcUUssrSxv9P",
+      "4FjSjbdSFYSru6SqBrsoHQ2S7Yd1m7Aam7K1QsUwvhhh",
+      "Gcee8cZPXyhoELvRneQTh2dR1Ge2tpfuUxMtBFmEPTJE",
+      "293xKa43t5saWxHsphFQ4MRav9fzfZsCw5h85vvEvFEP",
+      "HVGLrm5FedaWkQQ9D1WAD56NhZ3sguGU2j96cfGGiu5q",
+      "DPfsaBzYjjCvXN5HFwB9sWMCdFBeHfSqW7AYGuBcZowa",
+      "5E91EsfDVioYPGqUBfs9R8xaZc3nSzRxAQ4fNEcuC2mY",
+      "3fFbcoGLNis34CjgYQY1s86voNqcrUe1CKhKmaSmC6gD",
+      "HDTXGyV61EHLHGt2okzfSPU2dtvhSc4DVe5x9fuDhvmd",
+      "ASsHcC3NYK69UH9kFvBE5cGpgTvT9hzLyKS7igeLaU6D",
+      "8uvpVTdEMb38Z7fGWV9aZa9cmHwDaJFwLQDeWU2AzDTb",
+      "11111111111111111111111111111111"
+     ],
+     "data": "3g9vpWjqyCxsxFbyLdV7QLabb2AK3R47C1PanAuMXqBYG5cdidJsUnPwAk2SUh2wrG1hkh9dim7HEsW72EWeDMvBYaNu96R5KVsGb9aDA82uGD36rRj7b7uaUjfDB9CpYiw6w59QGyT6vv8wuUwt7EpVoMNqk8qURRthuuf2oWTs42LY3hayrEZWsmVceMreAYLfx3LnNUyHyqUzm4oAsBjLnbZ",
+     "programId": "CDESjex4EDBKLwx9ZPzVbjiHEHatasb5fhSJZMzNfvw2",
+     "stackHeight": 1
+    }
+   ],
+   "recentBlockhash": "GRf7qhvsS82SBdqJ2tM5RXghcwQEeZ5ALUnz4tKbyqAr"
+  },
+  "signatures": [
+   "5iy5FdV5EESYYMXEmw7urCoeVrmqN387W49oZHPb9bQ5vwpp9LY8SPn7ALcRPfqEHsJT6mAuo711EYfp1QfauT3u"
+  ]
+ },
+ "transactionIndex": 8,
+ "version": 0
+}

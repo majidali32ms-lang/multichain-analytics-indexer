@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.2.0
+
+Adds Solana.
+
+- Look up accounts with their SPL token accounts, SPL Token and Token-2022 mints, and
+  programs with their upgrade authority.
+- Sync an account's history with `getSignaturesForAddress` and `getTransaction`. An
+  interrupted sync resumes from its signature cursor. Records stay pending until finalized.
+- Reads legacy, v0 and v1 transactions. Priority fees are in lamports for every version,
+  from `transactionConfig` on v1 and from Compute Budget instructions on legacy and v0.
+- Metrics: fees in lamports, compute units, priority fees, program calls, top SPL tokens,
+  and a count per transaction version.
+- Devnet by default; mainnet, testnet and localnet with `--network`. Commitment is
+  `confirmed` or `finalized`.
+
+Changes to existing behaviour:
+
+- `AssetRecord.creator` and `ContractRecord.creator` are now optional, because a Solana
+  mint or program records no creator.
+- The Solana request rate defaults to 1 every 2 seconds, the fastest measured rate that
+  drew no HTTP 429 from the public endpoints. `MCI_REQUESTS_PER_SECOND` overrides it.
+
 ## 0.1.0
 
 First release, with Algorand support.

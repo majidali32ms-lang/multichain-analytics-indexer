@@ -17,6 +17,8 @@ has the same methods as coroutines.
 
 ::: multichain_indexer.core.models.ContractRecord
 
+::: multichain_indexer.core.models.TransactionPage
+
 ::: multichain_indexer.core.models.SyncResult
 
 ::: multichain_indexer.core.models.MetricsReport

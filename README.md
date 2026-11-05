@@ -8,7 +8,8 @@ A Python library and command line for indexing and analysing blockchain accounts
 transactions, in each chain's own terms. It keeps what it reads in a local database,
 syncs incrementally, and produces metrics and exports for analysis.
 
-This version supports **Algorand**. See the [roadmap](#roadmap) for what comes next.
+This version supports **Algorand** and **Solana**. See the [roadmap](#roadmap) for what
+comes next.
 
 ## Install
 
@@ -163,6 +164,82 @@ A few things worth knowing when reading the numbers:
 - Every record is `final`: Algorand has instant finality, and a transaction that fails
   never reaches a block.
 
+## Solana
+
+Reads the Solana JSON-RPC API over `aiohttp`. `solders` validates public keys, before any
+request is sent. A mint or program records no creator on-chain, so `creator` is empty and
+the mint and upgrade authorities are in `native`.
+
+| Option | Meaning |
+|---|---|
+| `--network devnet` | The default. |
+| `--network testnet` | The public testnet endpoint. |
+| `--network mainnet` | Must be asked for explicitly. |
+| `--network localnet` | `solana-test-validator`, at `http://localhost:8899`. |
+
+Set `SOLANA_<NETWORK>_RPC_SERVER` in `.env` to use your own endpoint, and
+`SOLANA_<NETWORK>_COMMITMENT` to choose `confirmed` (the default) or `finalized`.
+
+A sync makes one `getTransaction` per signature, and public endpoints limit that method
+tightly: at 1 request per second they still answered HTTP 429, and at 1 every 2 seconds
+they did not, so that is the default. Raise it with `MCI_REQUESTS_PER_SECOND` on a
+dedicated endpoint. If a public endpoint keeps answering 429, the error says so and
+suggests one. The [Solana page](https://majidali32ms-lang.github.io/multichain-analytics-indexer/chains/solana/)
+has the measurements.
+
+### Commands
+
+```bash
+multichain-indexer --chain solana index account <address>
+```
+
+```bash
+multichain-indexer --chain solana index token <mint>
+```
+
+```bash
+multichain-indexer --chain solana index program <program-id>
+```
+
+```bash
+multichain-indexer --chain solana sync <address>
+```
+
+```bash
+multichain-indexer --chain solana metrics --days 30
+```
+
+```bash
+multichain-indexer --chain solana export --format csv --output transactions.csv
+```
+
+```text
+Synced FwcsNmTLbf8VVqxuBMjEDTh39gXR87n3vAnAwvAiPtRy on solana devnet: 6 transactions up to height 519016039, 8 requests in 15.2s
+Synced FwcsNmTLbf8VVqxuBMjEDTh39gXR87n3vAnAwvAiPtRy on solana devnet: 0 transactions up to height 519016125, 2 requests in 2.8s
+```
+
+### Transaction versions
+
+Legacy, v0 and v1 transactions are all read. Priority fees are in lamports for every
+version, so metrics compare correctly:
+
+| | Compute unit limit | Priority fee |
+|---|---|---|
+| v1 | `transactionConfig.computeUnitLimit` | `transactionConfig.priorityFee`, the total |
+| v0, legacy | Compute Budget instruction | Compute Budget price per unit, times the limit |
+
+### What is recorded
+
+The `native` block holds the slot, transaction version, compute units, priority fee,
+address lookup tables, every instruction including inner ones, and SOL, SPL Token and
+Token-2022 transfers. Accounts include their SPL token accounts.
+
+- `amount` is the first transfer in the transaction: in lamports, or in a token's base
+  units when `native.amount_mint` is set. All transfers are in `native`.
+- `sender` is the fee payer.
+- `status` is `pending` until finalized, then `final` or `failed`. Pending records are
+  fetched again on the next sync.
+
 ## How it is built
 
 ```text
@@ -182,6 +259,7 @@ multichain_indexer/
     config.py         settings from .env and the environment
     observability.py  structured logs with secrets masked
   adapters/algorand/  client, parser, metrics
+  adapters/solana/    client, parser, metrics
 ```
 
 A sync can be stopped at any point and picks up where it left off. It walks a fixed

@@ -9,6 +9,7 @@ import threading
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import pytest
 from aiohttp import web
@@ -17,10 +18,15 @@ from pydantic import SecretStr
 from multichain_indexer.core.config import Settings
 
 FIXTURES = Path(__file__).parent / "fixtures" / "algorand"
+SOLANA_FIXTURES = Path(__file__).parent / "fixtures" / "solana"
 
 
 def load_fixture(name: str) -> dict[str, object]:
     return json.loads((FIXTURES / f"{name}.json").read_text(encoding="utf-8"))
+
+
+def load_solana_fixture(name: str) -> dict[str, Any]:
+    return json.loads((SOLANA_FIXTURES / f"{name}.json").read_text(encoding="utf-8"))
 
 
 @dataclass
@@ -38,6 +44,7 @@ class FakeNode:
     def __init__(self) -> None:
         self.routes: dict[str, Reply | list[Reply]] = {}
         self.requests: list[tuple[str, dict[str, str]]] = []
+        self.rpc_calls: list[tuple[str, list[object]]] = []
         self.received_headers: list[dict[str, str]] = []
         self._loop = asyncio.new_event_loop()
         self._started = threading.Event()
@@ -56,6 +63,9 @@ class FakeNode:
 
     def requests_to(self, path: str) -> list[dict[str, str]]:
         return [query for requested, query in self.requests if requested == path]
+
+    def rpc_params(self, method: str) -> list[list[object]]:
+        return [params for called, params in self.rpc_calls if called == method]
 
     def _run(self) -> None:
         asyncio.set_event_loop(self._loop)
@@ -76,7 +86,7 @@ class FakeNode:
     async def _handle(self, request: web.Request) -> web.Response:
         self.requests.append((request.path, dict(request.query)))
         self.received_headers.append(dict(request.headers))
-        reply = self._next_reply(request.path)
+        reply = self._next_reply(await self._route_key(request))
         if reply.delay:
             await asyncio.sleep(reply.delay)
         text = reply.raw if reply.raw is not None else json.dumps(reply.body)
@@ -87,10 +97,18 @@ class FakeNode:
             content_type="application/json",
         )
 
-    def _next_reply(self, path: str) -> Reply:
-        route = self.routes.get(path)
+    async def _route_key(self, request: web.Request) -> str:
+        """A JSON-RPC call is routed by its method, everything else by its path."""
+        if request.method != "POST":
+            return request.path
+        body = json.loads(await request.text())
+        self.rpc_calls.append((body["method"], body["params"]))
+        return f"rpc:{body['method']}"
+
+    def _next_reply(self, key: str) -> Reply:
+        route = self.routes.get(key)
         if route is None:
-            return Reply({"message": f"no route for {path}"}, status=404)
+            return Reply({"message": f"no route for {key}"}, status=404)
         return route.pop(0) if isinstance(route, list) else route
 
 

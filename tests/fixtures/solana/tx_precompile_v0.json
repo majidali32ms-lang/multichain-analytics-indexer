@@ -1,0 +1,115 @@
+{
+ "blockTime": 1793898452,
+ "meta": {
+  "computeUnitsConsumed": 7895,
+  "costUnits": 11774,
+  "err": {
+   "InstructionError": [
+    1,
+    {
+     "Custom": 6016
+    }
+   ]
+  },
+  "fee": 10000,
+  "innerInstructions": [],
+  "postBalances": [
+   22335823759,
+   975360,
+   1,
+   1518920,
+   0,
+   833120
+  ],
+  "postTokenBalances": [],
+  "preBalances": [
+   22335833759,
+   975360,
+   1,
+   1518920,
+   0,
+   833120
+  ],
+  "preTokenBalances": [],
+  "rewards": [],
+  "status": {
+   "Err": {
+    "InstructionError": [
+     1,
+     {
+      "Custom": 6016
+     }
+    ]
+   }
+  }
+ },
+ "slot": 519008215,
+ "transaction": {
+  "message": {
+   "accountKeys": [
+    {
+     "pubkey": "FGPodAPAp3p2oF9YxXcw2LDHeZEAsbjLoJtHPFnpeEjj",
+     "signer": true,
+     "source": "transaction",
+     "writable": true
+    },
+    {
+     "pubkey": "AycBYFuM4Q858SYQUis3P2Wvjg4mYuYyXqZbatVT28eF",
+     "signer": false,
+     "source": "transaction",
+     "writable": true
+    },
+    {
+     "pubkey": "Ed25519SigVerify111111111111111111111111111",
+     "signer": false,
+     "source": "transaction",
+     "writable": false
+    },
+    {
+     "pubkey": "JGX3C3woYrHhPP2Qwb5NzTj1ACK725V67CTpWCYnYhx",
+     "signer": false,
+     "source": "transaction",
+     "writable": false
+    },
+    {
+     "pubkey": "Sysvar1nstructions1111111111111111111111111",
+     "signer": false,
+     "source": "transaction",
+     "writable": false
+    },
+    {
+     "pubkey": "CtyYF1kvxEmQsuQCzAAoaAob7vQkGK8QUncxTKDoaLb5",
+     "signer": false,
+     "source": "transaction",
+     "writable": false
+    }
+   ],
+   "addressTableLookups": [],
+   "instructions": [
+    {
+     "accounts": [],
+     "data": "xn2NLu4bJbrrBbCrvkjzaNgWpwj7PPEYWepw279EpkK9BeG1RyNv7a1s8pSqSsJ8VDKGcq22ReYMLoKJig6yPAaLWGDVBEoWWdCnnnFvAzGxRFhi6kYjDQaXsEAtvFbe53U4B1R6pKL7wzM9k37btxC82GRU5iquLq6BMFmFvMkiGqWh4b79G4ie8FyHrh85xFSScxPuMeY2kD3KuhtpLgGj92wNdAjAofdgM9LwvSQsRSi",
+     "programId": "Ed25519SigVerify111111111111111111111111111",
+     "stackHeight": 1
+    },
+    {
+     "accounts": [
+      "AycBYFuM4Q858SYQUis3P2Wvjg4mYuYyXqZbatVT28eF",
+      "JGX3C3woYrHhPP2Qwb5NzTj1ACK725V67CTpWCYnYhx",
+      "Sysvar1nstructions1111111111111111111111111",
+      "FGPodAPAp3p2oF9YxXcw2LDHeZEAsbjLoJtHPFnpeEjj"
+     ],
+     "data": "BrgVCHiyXkFbfjch2RseXbXXAQ9BWyYcoqSd8X1TxwLXEz8j8PQVyBcLSq3k2x33jDzXxhKo8wqytJ2WVH7JdqbFxMaaoQfQGXD7juGn",
+     "programId": "CtyYF1kvxEmQsuQCzAAoaAob7vQkGK8QUncxTKDoaLb5",
+     "stackHeight": 1
+    }
+   ],
+   "recentBlockhash": "8BZEmCyc8UorJY57SRCPZG6rjtDp3hKy9b9U7FwKw6tq"
+  },
+  "signatures": [
+   "3jBFHhbVk7mf7d1WCEhFGYGaX5jtGeUeHshYdHmNxfSJ88JTfadJec97aPAcqG1NsyXBYaaBsvppV5PRCj8t5mxj"
+  ]
+ },
+ "transactionIndex": 0,
+ "version": 0
+}
