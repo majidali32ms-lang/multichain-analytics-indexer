@@ -97,29 +97,58 @@ class ApiClient:
             MalformedResponse: The body is not a JSON object.
         """
         query = dict(params or {})
-        key = self._cache_key(path, query) if immutable and self._cache else None
-        cached = self._cache.get(key) if self._cache and key else None
-        if cached is not None:
-            return _decode_object(cached, path)
+        return await self._cached_request("GET", path, query, None, immutable=immutable)
 
-        body = await self._request_with_retries(path, query)
-        decoded = _decode_object(body, path)
-        if self._cache and key:
-            self._cache.put(key, body)
-        return decoded
+    async def post_json(
+        self, path: str, payload: JsonObject, *, immutable: bool = False
+    ) -> JsonObject:
+        """POST a JSON body and return the decoded JSON object.
+
+        Args:
+            path: Request path, appended to the base URL.
+            payload: The JSON body.
+            immutable: The response can never change, so it may be read from and
+                written to the cache.
+
+        Raises:
+            The same errors as ``get_json``.
+        """
+        return await self._cached_request("POST", path, {}, payload, immutable=immutable)
 
     async def aclose(self) -> None:
         if self._session is not None:
             await self._session.close()
         self._session = None
 
-    async def _request_with_retries(self, path: str, query: QueryParams) -> str:
+    async def _cached_request(
+        self,
+        method: str,
+        path: str,
+        query: QueryParams,
+        payload: JsonObject | None,
+        *,
+        immutable: bool,
+    ) -> JsonObject:
+        key = self._cache_key(method, path, query, payload) if immutable and self._cache else None
+        cached = self._cache.get(key) if self._cache and key else None
+        if cached is not None:
+            return _decode_object(cached, path)
+
+        body = await self._request_with_retries(method, path, query, payload)
+        decoded = _decode_object(body, path)
+        if self._cache and key:
+            self._cache.put(key, body)
+        return decoded
+
+    async def _request_with_retries(
+        self, method: str, path: str, query: QueryParams, payload: JsonObject | None
+    ) -> str:
         failure: NetworkError = NetworkError(f"{path}: no attempt was made")
         for attempt in range(self._max_retries + 1):
             if attempt:
                 await self._wait_before_retry(attempt, failure, path)
             try:
-                reply = await self._send(path, query)
+                reply = await self._send(method, path, query, payload)
             except (TimeoutError, aiohttp.ClientError) as exc:
                 failure = NetworkError(f"{path}: {type(exc).__name__} while calling the node")
                 continue
@@ -135,14 +164,16 @@ class ApiClient:
         logger.warning("retrying request", extra={"path": path, "reason": str(failure)})
         await asyncio.sleep(delay)
 
-    async def _send(self, path: str, query: QueryParams) -> _Reply:
+    async def _send(
+        self, method: str, path: str, query: QueryParams, payload: JsonObject | None
+    ) -> _Reply:
         if self._limiter:
             await self._limiter.acquire()
         url = self._base_url.get_secret_value().rstrip("/") + path
         headers = {name: value.get_secret_value() for name, value in self._headers.items()}
         self.requests_made += 1
-        async with self._client().get(
-            url, params=query or None, headers=headers, timeout=self._timeout
+        async with self._client().request(
+            method, url, params=query or None, json=payload, headers=headers, timeout=self._timeout
         ) as response:
             return _Reply(
                 status=response.status,
@@ -155,8 +186,10 @@ class ApiClient:
             self._session = aiohttp.ClientSession()
         return self._session
 
-    def _cache_key(self, path: str, query: QueryParams) -> str:
-        identity = [self._base_url.get_secret_value(), path, sorted(query.items())]
+    def _cache_key(
+        self, method: str, path: str, query: QueryParams, payload: JsonObject | None
+    ) -> str:
+        identity = [self._base_url.get_secret_value(), method, path, sorted(query.items()), payload]
         return hashlib.sha256(json.dumps(identity).encode()).hexdigest()
 
 

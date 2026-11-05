@@ -69,6 +69,47 @@ async def test_failures_that_retrying_cannot_fix_raise_at_once(
     assert client.requests_made == 1
 
 
+async def test_post_sends_the_json_body_and_returns_the_reply(
+    node: FakeNode, make_client: ClientFactory
+) -> None:
+    node.routes["rpc:getSlot"] = Reply({"result": 9})
+    client = make_client(headers={"X-Token": SecretStr("abc")})
+
+    reply = await client.post_json("/", {"jsonrpc": "2.0", "method": "getSlot", "params": []})
+
+    assert reply == {"result": 9}
+    assert node.rpc_calls == [("getSlot", [])]
+    assert node.received_headers[0]["X-Token"] == "abc"
+    assert client.requests_made == 1
+
+
+async def test_post_retries_like_a_get(node: FakeNode, make_client: ClientFactory) -> None:
+    node.routes["rpc:getSlot"] = [Reply({"message": "busy"}, status=503), Reply({"result": 9})]
+    client = make_client()
+    assert await client.post_json("/", {"method": "getSlot", "params": []}) == {"result": 9}
+    assert client.requests_made == 2
+
+
+async def test_post_cache_serves_immutable_replies_by_body(
+    node: FakeNode, make_client: ClientFactory, tmp_path: Path
+) -> None:
+    node.routes["rpc:getBlock"] = Reply({"result": "block"})
+    cache = ResponseCache(tmp_path / "cache.db")
+    client = make_client(cache=cache)
+    first = {"method": "getBlock", "params": [1]}
+    second = {"method": "getBlock", "params": [2]}
+
+    await client.post_json("/", first, immutable=True)
+    await client.post_json("/", first, immutable=True)
+    assert client.requests_made == 1
+
+    await client.post_json("/", second, immutable=True)
+    assert client.requests_made == 2
+    await client.post_json("/", first)
+    assert client.requests_made == 3
+    cache.close()
+
+
 async def test_server_errors_are_retried_then_succeed(
     node: FakeNode, make_client: ClientFactory
 ) -> None:
