@@ -8,10 +8,10 @@ This version supports [Algorand](chains/algorand.md) and [Solana](chains/solana.
 ## Install
 
 ```bash
-pip install .
+pip install multichain-analytics-indexer
 ```
 
-Python 3.11 or newer, from a checkout of the repository.
+Python 3.11 or newer.
 
 ## Use it
 

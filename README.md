@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/majidali32ms-lang/multichain-analytics-indexer/actions/workflows/ci.yml/badge.svg)](https://github.com/majidali32ms-lang/multichain-analytics-indexer/actions/workflows/ci.yml)
 ![coverage](https://img.shields.io/badge/coverage-99%25-brightgreen)
+[![PyPI](https://img.shields.io/pypi/v/multichain-analytics-indexer)](https://pypi.org/project/multichain-analytics-indexer/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
 A Python library and command line for indexing and analysing blockchain accounts and
@@ -14,11 +15,10 @@ comes next.
 ## Install
 
 ```bash
-pip install .
+pip install multichain-analytics-indexer
 ```
 
-Python 3.11 or newer. The package is not on PyPI yet, so install it from a checkout of
-this repository.
+Python 3.11 or newer.
 
 ## Quick start
 
