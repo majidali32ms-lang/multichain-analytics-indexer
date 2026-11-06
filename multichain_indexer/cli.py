@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import errno
 import functools
 import json
+import os
 import sys
 from collections.abc import Callable
 from pathlib import Path
-from typing import Concatenate, ParamSpec, TypeVar
+from typing import Concatenate, ParamSpec, TextIO, TypeVar
 
 import click
 
@@ -23,6 +25,10 @@ _P = ParamSpec("_P")
 _T = TypeVar("_T")
 
 DEFAULT_RECENT_TRANSACTIONS = 10
+# The exit code Click uses when the reader of a pipe goes away, as in `... | head`.
+EXIT_OUTPUT_CLOSED = 1
+# A write to a closed pipe fails with EPIPE on Linux and EINVAL on Windows.
+CLOSED_PIPE_ERRNOS = frozenset({errno.EPIPE, errno.EINVAL})
 
 
 class _Options:
@@ -213,11 +219,42 @@ def export(
     """Export stored transactions."""
     text = indexer.export(export_format, output, account=account, days=days)
     if text is not None:
-        sys.stdout.write(text.rstrip("\n") + "\n")
+        click.echo(text.rstrip("\n"))
 
 
 def main() -> None:
-    cli()
+    """Run the command line; a reader closing the output pipe ends it quietly."""
+    try:
+        cli()
+    except OSError as error:
+        if not _is_closed_output(error):
+            raise
+        _discard_pending_output()
+        sys.exit(EXIT_OUTPUT_CLOSED)
+
+
+def _is_closed_output(error: OSError) -> bool:
+    # EINVAL has other causes, such as a bad export path. Only a stream that still
+    # cannot flush proves the error came from the output closing.
+    if error.errno not in CLOSED_PIPE_ERRNOS:
+        return False
+    return any(_cannot_flush(stream) for stream in (sys.stdout, sys.stderr))
+
+
+def _cannot_flush(stream: TextIO) -> bool:
+    try:
+        stream.flush()
+    except OSError:
+        return True
+    return False
+
+
+def _discard_pending_output() -> None:
+    # Python flushes these streams again on exit, which would report the same failure.
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    for stream in (sys.stdout, sys.stderr):
+        os.dup2(devnull, stream.fileno())
+    os.close(devnull)
 
 
 def _require_chain(indexer: Indexer, chain: str, command: str) -> None:

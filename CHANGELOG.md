@@ -1,6 +1,16 @@
 # Changelog
 
+## 0.2.1
+
+The first release on PyPI.
+
+- Fixes the command line when its output pipe closes early, as in `multichain-indexer metrics
+  | head -1`. It used to print an error from Python and exit with code 120 on Windows. It
+  now exits quietly with code 1 on Windows and Linux.
+
 ## 0.2.0
+
+Published to TestPyPI only.
 
 Adds Solana.
 
