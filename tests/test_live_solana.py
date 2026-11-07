@@ -41,6 +41,18 @@ def test_lookups_and_incremental_sync_on_devnet(tmp_path: Path) -> None:
         assert indexer.metrics(days=3650, account=ACCOUNT).chain == "solana"
 
 
+@pytest.mark.parametrize("cluster", ["devnet", "testnet", "mainnet"])
+def test_public_endpoint_serves_its_recorded_genesis_hash(cluster: str) -> None:
+    async def head() -> int:
+        adapter = create_indexer(cluster, Settings())
+        try:
+            return await adapter.chain_head()
+        finally:
+            await adapter.aclose()
+
+    assert asyncio.run(head()) > 0
+
+
 def test_recent_block_with_a_v1_transaction_is_read_on_devnet() -> None:
     async def find_v1() -> set[str]:
         adapter = create_indexer("devnet", Settings())

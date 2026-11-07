@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Solana: checks the endpoint's `getGenesisHash` before the first request and raises
+  `WrongNetwork` if it serves a different cluster than `--network`. Each run makes one more
+  request, which takes about 2 seconds more at the default rate.
+
 ## 0.2.1
 
 The first release on PyPI.

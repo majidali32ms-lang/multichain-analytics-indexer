@@ -43,6 +43,12 @@ class SolanaRpc:
     def requests_made(self) -> int:
         return self._client.requests_made
 
+    async def genesis_hash(self) -> str:
+        result = await self._call("getGenesisHash", [])
+        if not isinstance(result, str):
+            raise MalformedResponse("getGenesisHash: expected a base-58 hash")
+        return result
+
     async def slot(self) -> int:
         result = await self._call("getSlot", [{"commitment": self._commitment}])
         if not isinstance(result, int):

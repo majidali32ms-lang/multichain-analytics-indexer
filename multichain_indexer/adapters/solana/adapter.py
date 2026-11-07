@@ -31,7 +31,12 @@ from multichain_indexer.adapters.solana.parser import (
 )
 from multichain_indexer.core.base_indexer import BaseIndexer, ChainProfile
 from multichain_indexer.core.config import Settings
-from multichain_indexer.core.errors import ConfigError, InvalidAddress, InvalidInput
+from multichain_indexer.core.errors import (
+    ConfigError,
+    InvalidAddress,
+    InvalidInput,
+    WrongNetwork,
+)
 from multichain_indexer.core.http import ApiClient, ResponseStore
 from multichain_indexer.core.models import (
     AccountRecord,
@@ -54,6 +59,13 @@ DEFAULT_RPC_SERVERS = {
     "devnet": "https://api.devnet.solana.com",
     "testnet": "https://api.testnet.solana.com",
     "localnet": "http://localhost:8899",
+}
+LOCALNET = "localnet"
+# A local validator creates its own genesis hash, so any hash not listed here counts as local.
+CLUSTER_BY_GENESIS_HASH = {
+    "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d": "mainnet",
+    "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG": "devnet",
+    "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY": "testnet",
 }
 # The cluster docs state 40 requests per 10 seconds for one RPC method, but the public
 # endpoints report a limit of 10 for getTransaction and enforce it: measured on devnet,
@@ -87,12 +99,14 @@ class SolanaIndexer(BaseIndexer):
         super().__init__(network)
         self._rpc = rpc
         self._commitment = commitment
+        self._cluster_confirmed = False
 
     def validate_address(self, address: str) -> str:
         return _validated_public_key(address, "Solana address")
 
     async def fetch_account(self, address: str) -> AccountRecord:
         owner = self.validate_address(address)
+        await self._require_cluster()
         info = await self._rpc.account_info(owner)
         token_accounts = [
             await self._rpc.token_accounts_by_owner(owner, program)
@@ -102,10 +116,12 @@ class SolanaIndexer(BaseIndexer):
 
     async def fetch_asset(self, asset_id: str) -> AssetRecord:
         mint = _validated_public_key(asset_id, "SPL token mint")
+        await self._require_cluster()
         return parse_mint(await self._rpc.account_info(mint), mint, self.network)
 
     async def fetch_contract(self, contract_id: str) -> ContractRecord:
         program_id = _validated_public_key(contract_id, "program ID")
+        await self._require_cluster()
         info = await self._rpc.account_info(program_id)
         program_data = program_data_address(info, program_id)
         header = await self._rpc.program_data_header(program_data) if program_data else None
@@ -120,10 +136,12 @@ class SolanaIndexer(BaseIndexer):
         """
         if slot < 0:
             raise InvalidInput("a slot cannot be negative")
+        await self._require_cluster()
         result = await self._rpc.block(slot)
         return parse_block(result, slot, self.network, self._commitment)
 
     async def chain_head(self) -> int:
+        await self._require_cluster()
         return await self._rpc.slot()
 
     def final_height(self, head: int) -> int:
@@ -140,6 +158,7 @@ class SolanaIndexer(BaseIndexer):
         cursor: str | None = None,
     ) -> AsyncIterator[TransactionPage]:
         account = self.validate_address(address)
+        await self._require_cluster()
         before = cursor
         while True:
             rows = await self._signature_rows(account, before)
@@ -173,6 +192,19 @@ class SolanaIndexer(BaseIndexer):
 
     async def aclose(self) -> None:
         await self._rpc.aclose()
+
+    async def _require_cluster(self) -> None:
+        """Confirm once that the endpoint serves the requested cluster.
+
+        Raises:
+            WrongNetwork: The endpoint's genesis hash belongs to another cluster.
+        """
+        if self._cluster_confirmed:
+            return
+        genesis_hash = await self._rpc.genesis_hash()
+        if CLUSTER_BY_GENESIS_HASH.get(genesis_hash, LOCALNET) != self.network:
+            raise WrongNetwork(_wrong_cluster_message(self.network, genesis_hash))
+        self._cluster_confirmed = True
 
     async def _signature_rows(self, account: str, before: str | None) -> list[SignatureRow]:
         result = await self._rpc.signatures_for_address(
@@ -221,6 +253,15 @@ def _requests_per_second(settings: Settings) -> float:
     if "requests_per_second" in settings.model_fields_set:
         return settings.requests_per_second
     return DEFAULT_REQUESTS_PER_SECOND
+
+
+def _wrong_cluster_message(network: str, genesis_hash: str) -> str:
+    cluster = CLUSTER_BY_GENESIS_HASH.get(genesis_hash)
+    served = (
+        f"Solana {cluster}" if cluster else f"an unknown cluster, genesis hash {genesis_hash!r}"
+    )
+    setting = f"{CHAIN}_{network}_RPC_SERVER".upper()
+    return f"the RPC endpoint serves {served}, not Solana {network}. Check {setting}."
 
 
 def _validated_public_key(value: str, label: str) -> str:

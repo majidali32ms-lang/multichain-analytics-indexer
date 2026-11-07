@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +19,7 @@ from multichain_indexer import (
     NetworkError,
     NotFound,
     RateLimited,
+    WrongNetwork,
 )
 from multichain_indexer.adapters.solana import SolanaIndexer, create_indexer
 from multichain_indexer.adapters.solana import adapter as adapter_module
@@ -33,6 +34,10 @@ MINT = "So11111111111111111111111111111111111111112"
 PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 HEAD = 519_100_000
 PAGE_SIZE = 2
+MAINNET_GENESIS_HASH = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d"
+DEVNET_GENESIS_HASH = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"
+TESTNET_GENESIS_HASH = "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY"
+LOCAL_GENESIS_HASH = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin"
 
 
 def rpc_ok(result: object) -> Reply:
@@ -62,6 +67,7 @@ def small_pages(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def solana_settings(node: FakeNode, tmp_path: Path) -> Settings:
+    node.routes["rpc:getGenesisHash"] = rpc_ok(DEVNET_GENESIS_HASH)
     return Settings(
         database=tmp_path / "solana.db",
         requests_per_second=1000,
@@ -297,6 +303,138 @@ async def test_bad_public_keys_never_reach_the_network(
     assert node.rpc_calls == []
 
 
+def settings_for_cluster(settings: Settings, network: str, node: FakeNode) -> Settings:
+    env = {f"SOLANA_{network.upper()}_RPC_SERVER": SecretStr(node.url)}
+    return settings.model_copy(update={"env": env})
+
+
+@pytest.mark.parametrize(
+    ("network", "genesis_hash"),
+    [
+        ("mainnet", MAINNET_GENESIS_HASH),
+        ("devnet", DEVNET_GENESIS_HASH),
+        ("testnet", TESTNET_GENESIS_HASH),
+        ("localnet", LOCAL_GENESIS_HASH),
+    ],
+)
+async def test_endpoint_serving_the_requested_cluster_is_accepted(
+    node: FakeNode, solana_settings: Settings, network: str, genesis_hash: str
+) -> None:
+    node.routes["rpc:getGenesisHash"] = rpc_ok(genesis_hash)
+    node.routes["rpc:getSlot"] = rpc_ok(HEAD)
+    adapter = create_indexer(network, settings_for_cluster(solana_settings, network, node))
+    try:
+        assert await adapter.chain_head() == HEAD
+    finally:
+        await adapter.aclose()
+
+
+@pytest.mark.parametrize(
+    ("network", "genesis_hash", "served"),
+    [
+        ("devnet", MAINNET_GENESIS_HASH, "Solana mainnet"),
+        ("mainnet", DEVNET_GENESIS_HASH, "Solana devnet"),
+        ("testnet", DEVNET_GENESIS_HASH, "Solana devnet"),
+        ("localnet", MAINNET_GENESIS_HASH, "Solana mainnet"),
+        ("devnet", LOCAL_GENESIS_HASH, f"an unknown cluster, genesis hash '{LOCAL_GENESIS_HASH}'"),
+    ],
+)
+async def test_endpoint_serving_another_cluster_is_refused_before_any_other_call(
+    node: FakeNode, solana_settings: Settings, network: str, genesis_hash: str, served: str
+) -> None:
+    node.routes["rpc:getGenesisHash"] = rpc_ok(genesis_hash)
+    adapter = create_indexer(network, settings_for_cluster(solana_settings, network, node))
+    try:
+        with pytest.raises(WrongNetwork) as caught:
+            await adapter.chain_head()
+    finally:
+        await adapter.aclose()
+
+    setting = f"SOLANA_{network.upper()}_RPC_SERVER"
+    assert str(caught.value) == (
+        f"the RPC endpoint serves {served}, not Solana {network}. Check {setting}."
+    )
+    assert [method for method, _ in node.rpc_calls] == ["getGenesisHash"]
+
+
+@pytest.mark.parametrize(
+    "lookup",
+    [
+        lambda adapter: adapter.fetch_account(ADDRESS),
+        lambda adapter: adapter.fetch_asset(MINT),
+        lambda adapter: adapter.fetch_contract(PROGRAM),
+        lambda adapter: adapter.fetch_block(5),
+        lambda adapter: adapter.chain_head(),
+        lambda adapter: anext(adapter.iter_account_transactions(ADDRESS)),
+    ],
+    ids=["account", "mint", "program", "block", "head", "history"],
+)
+async def test_every_lookup_checks_the_cluster_first(
+    node: FakeNode, indexer: SolanaIndexer, lookup: Callable[[SolanaIndexer], Awaitable[object]]
+) -> None:
+    node.routes["rpc:getGenesisHash"] = rpc_ok(MAINNET_GENESIS_HASH)
+    with pytest.raises(WrongNetwork, match="serves Solana mainnet, not Solana devnet"):
+        await lookup(indexer)
+    assert [method for method, _ in node.rpc_calls] == ["getGenesisHash"]
+
+
+async def test_cluster_is_confirmed_once_per_adapter(
+    node: FakeNode, indexer: SolanaIndexer
+) -> None:
+    node.routes["rpc:getSlot"] = rpc_ok(HEAD)
+    await indexer.chain_head()
+    await indexer.chain_head()
+    assert len(node.rpc_params("getGenesisHash")) == 1
+    assert len(node.rpc_params("getSlot")) == 2
+
+
+async def test_cluster_check_that_could_not_run_is_tried_again(
+    node: FakeNode, indexer: SolanaIndexer
+) -> None:
+    node.routes["rpc:getGenesisHash"] = [
+        Reply({"message": "restarting"}, status=503),
+        rpc_ok(DEVNET_GENESIS_HASH),
+    ]
+    node.routes["rpc:getSlot"] = rpc_ok(HEAD)
+    with pytest.raises(NetworkError):
+        await indexer.chain_head()
+    assert node.rpc_params("getSlot") == []
+    assert await indexer.chain_head() == HEAD
+
+
+@pytest.mark.parametrize("result", [None, 5, {"hash": DEVNET_GENESIS_HASH}])
+async def test_genesis_hash_of_the_wrong_type_is_malformed(
+    node: FakeNode, indexer: SolanaIndexer, result: object
+) -> None:
+    node.routes["rpc:getGenesisHash"] = rpc_ok(result)
+    with pytest.raises(MalformedResponse, match="getGenesisHash"):
+        await indexer.chain_head()
+
+
+def test_sync_against_another_cluster_stores_nothing(
+    node: FakeNode, solana_settings: Settings
+) -> None:
+    node.routes["rpc:getGenesisHash"] = rpc_ok(MAINNET_GENESIS_HASH)
+    with Indexer("solana", settings=solana_settings) as indexer:
+        with pytest.raises(WrongNetwork):
+            indexer.sync(ADDRESS)
+        assert indexer.stored_transactions() == []
+    assert [method for method, _ in node.rpc_calls] == ["getGenesisHash"]
+
+
+def test_cli_reports_the_wrong_cluster_without_the_endpoint_or_a_traceback(
+    node: FakeNode, invoke: Any
+) -> None:
+    node.routes["rpc:getGenesisHash"] = rpc_ok(MAINNET_GENESIS_HASH)
+    result = invoke("--chain", "solana", "index", "account", ADDRESS)
+    assert result.exit_code != 0
+    assert isinstance(result.exception, SystemExit)
+    assert "serves Solana mainnet, not Solana devnet" in result.output
+    assert "SOLANA_DEVNET_RPC_SERVER" in result.output
+    assert node.url not in result.output
+    assert "Traceback" not in result.output
+
+
 async def test_account_lookup_reads_both_token_programs(
     node: FakeNode, indexer: SolanaIndexer
 ) -> None:
@@ -435,6 +573,7 @@ def test_metrics_through_the_api(
 
 @pytest.fixture
 def invoke(node: FakeNode, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
+    node.routes["rpc:getGenesisHash"] = rpc_ok(DEVNET_GENESIS_HASH)
     monkeypatch.setenv("SOLANA_DEVNET_RPC_SERVER", node.url)
     monkeypatch.setenv("ALGORAND_TESTNET_INDEXER_SERVER", node.url)
     monkeypatch.setenv("MCI_MAX_RETRIES", "0")
