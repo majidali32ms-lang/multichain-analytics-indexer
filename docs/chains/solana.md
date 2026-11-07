@@ -24,6 +24,12 @@ SOLANA_DEVNET_COMMITMENT=finalized
 Commitment is `confirmed` (the default) or `finalized`. The RPC methods used here refuse
 `processed`.
 
+Before its first request, the adapter asks the endpoint for `getGenesisHash` and stops with
+`WrongNetwork` if the answer belongs to a different cluster than `--network`. A hash that
+is not a public cluster's counts as `localnet`, because every local validator creates its
+own. So a `devnet` setting that points at mainnet fails, and so does a `localnet` setting
+that points at any public cluster. This takes one request per run.
+
 ## Rate limits
 
 The [cluster docs](https://solana.com/docs/references/clusters) state 40 requests per 10
