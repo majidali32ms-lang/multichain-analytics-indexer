@@ -1,0 +1,87 @@
+{
+ "is_success": true,
+ "transaction": {
+  "execution_outcome": {
+   "block_hash": "9HAevFJvFcz7Vrv9PG737ydZtGHrfXUp4C3SsDsjRuwg",
+   "block_height": 101600566,
+   "block_timestamp": 1664639890241945793,
+   "id": "HZhEukSxthqJjVG3Y6TSL3RxiicCMDWeGgag7KoH6CZB",
+   "index": 0,
+   "outcome": {
+    "executor_id": "hello.near-examples.testnet",
+    "gas_burnt": 929438689559,
+    "logs": [],
+    "receipt_ids": [
+     "JCG9n5mhp4Maqw2wFyj1FaV7oQJZVV1BaSAYgYmGyC3o"
+    ],
+    "status": {
+     "SuccessReceiptId": "JCG9n5mhp4Maqw2wFyj1FaV7oQJZVV1BaSAYgYmGyC3o"
+    },
+    "tokens_burnt": "92943868955900000000"
+   }
+  },
+  "receipts": [
+   {
+    "execution_outcome": {
+     "block_hash": "9HAevFJvFcz7Vrv9PG737ydZtGHrfXUp4C3SsDsjRuwg",
+     "block_height": 101600566,
+     "block_timestamp": 1664639890241945793,
+     "id": "JCG9n5mhp4Maqw2wFyj1FaV7oQJZVV1BaSAYgYmGyC3o",
+     "index": 0,
+     "outcome": {
+      "executor_id": "hello.near-examples.testnet",
+      "gas_burnt": 6326585710304,
+      "logs": [],
+      "receipt_ids": [],
+      "status": {
+       "SuccessValue": ""
+      },
+      "tokens_burnt": "632658571030400000000"
+     }
+    },
+    "receipt": {
+     "block_hash": "9HAevFJvFcz7Vrv9PG737ydZtGHrfXUp4C3SsDsjRuwg",
+     "block_height": 101600566,
+     "block_timestamp": 1664639890241945793,
+     "predecessor_id": "hello.near-examples.testnet",
+     "priority": 0,
+     "receipt": {
+      "Action": {
+       "actions": [
+        {
+         "DeployContract": {
+          "code": "YI/GB5mY3crqPGXUmKaUSQ+wyHzURtj2FsnuWq9WHmo="
+         }
+        }
+       ],
+       "gas_price": "100000000",
+       "input_data_ids": [],
+       "is_promise_yield": false,
+       "output_data_receivers": [],
+       "signer_id": "hello.near-examples.testnet",
+       "signer_public_key": "ed25519:D2tfTb52bFYhwCF1ErK6kv8zfW8teMS1iFCfR6WLDPh8"
+      }
+     },
+     "receipt_id": "JCG9n5mhp4Maqw2wFyj1FaV7oQJZVV1BaSAYgYmGyC3o",
+     "receipt_index": 0,
+     "receiver_id": "hello.near-examples.testnet"
+    }
+   }
+  ],
+  "transaction": {
+   "actions": [
+    {
+     "DeployContract": {
+      "code": "YI/GB5mY3crqPGXUmKaUSQ+wyHzURtj2FsnuWq9WHmo="
+     }
+    }
+   ],
+   "hash": "HZhEukSxthqJjVG3Y6TSL3RxiicCMDWeGgag7KoH6CZB",
+   "nonce": 101600547000001,
+   "priority_fee": 0,
+   "public_key": "ed25519:D2tfTb52bFYhwCF1ErK6kv8zfW8teMS1iFCfR6WLDPh8",
+   "receiver_id": "hello.near-examples.testnet",
+   "signer_id": "hello.near-examples.testnet"
+  }
+ }
+}

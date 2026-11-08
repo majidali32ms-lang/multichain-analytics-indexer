@@ -1,0 +1,18 @@
+{
+ "error": {
+  "cause": {
+   "info": {
+    "block_hash": "EFn3ip9krDi7UkUGxVzmBydAWmbgfbZTvzkL7TP9WNYp",
+    "block_height": 276673374,
+    "requested_account_id": "no-such-account-xyz.testnet"
+   },
+   "name": "UNKNOWN_ACCOUNT"
+  },
+  "code": -32000,
+  "data": "account no-such-account-xyz.testnet does not exist while viewing",
+  "message": "Server error",
+  "name": "HANDLER_ERROR"
+ },
+ "id": "1",
+ "jsonrpc": "2.0"
+}

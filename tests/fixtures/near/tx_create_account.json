@@ -1,0 +1,155 @@
+{
+ "is_success": true,
+ "transaction": {
+  "execution_outcome": {
+   "block_hash": "28JVJReWbYdxoVBx1QyVty1Je6nbkUjtwN75Z4iGKg5T",
+   "block_height": 276668920,
+   "block_timestamp": 1794076828746604576,
+   "id": "3LLY3UCsbVgrC2PEoJJwNF56rn5snxzqveGvb5HNj2QK",
+   "index": 1,
+   "outcome": {
+    "executor_id": "testnet",
+    "gas_burnt": 824947687500,
+    "logs": [],
+    "receipt_ids": [
+     "FZenkSyDzUmy2zpzA4nW1bbUc4D8WXdbr1JyUUgwUJ38"
+    ],
+    "status": {
+     "SuccessReceiptId": "FZenkSyDzUmy2zpzA4nW1bbUc4D8WXdbr1JyUUgwUJ38"
+    },
+    "tokens_burnt": "82494768750000000000"
+   }
+  },
+  "receipts": [
+   {
+    "execution_outcome": {
+     "block_hash": "9CetUAsd23HSfb4NTHa9ESjdryti5vHt8WHKtLQNaJ1C",
+     "block_height": 276668921,
+     "block_timestamp": 1794076829348084695,
+     "id": "FZenkSyDzUmy2zpzA4nW1bbUc4D8WXdbr1JyUUgwUJ38",
+     "index": 3,
+     "outcome": {
+      "executor_id": "pac-mig5-mw6r0o9ob.testnet",
+      "gas_burnt": 7524947687500,
+      "logs": [],
+      "receipt_ids": [
+       "G5b71czEYi4U8AaZ8br7yPQFxCQ6rFdACyDvHJcXS2s2"
+      ],
+      "status": {
+       "SuccessValue": ""
+      },
+      "tokens_burnt": "7032494768750000000000"
+     }
+    },
+    "receipt": {
+     "block_hash": "9CetUAsd23HSfb4NTHa9ESjdryti5vHt8WHKtLQNaJ1C",
+     "block_height": 276668921,
+     "block_timestamp": 1794076829348084695,
+     "predecessor_id": "testnet",
+     "priority": 0,
+     "receipt": {
+      "Action": {
+       "actions": [
+        "CreateAccount",
+        {
+         "Transfer": {
+          "deposit": "10000000000000000000000000"
+         }
+        },
+        {
+         "AddKey": {
+          "access_key": {
+           "nonce": 0,
+           "permission": "FullAccess"
+          },
+          "public_key": "ed25519:4hUGS8eDEZn488NY9oUXVXJTqX4ZS9UPrSGAbRnEoC7c"
+         }
+        }
+       ],
+       "gas_price": "1000000000",
+       "input_data_ids": [],
+       "is_promise_yield": false,
+       "output_data_receivers": [],
+       "signer_id": "testnet",
+       "signer_public_key": "ed25519:4XhhXfW316DeAYBTxQe7Z15WostJptFpnXdv57KtXVNC"
+      }
+     },
+     "receipt_id": "FZenkSyDzUmy2zpzA4nW1bbUc4D8WXdbr1JyUUgwUJ38",
+     "receipt_index": 1,
+     "receiver_id": "pac-mig5-mw6r0o9ob.testnet"
+    }
+   },
+   {
+    "execution_outcome": {
+     "block_hash": "3e9SJWPX12evfTFvLNcQnzmqP6Fps91XTV3vVF3KfgLk",
+     "block_height": 276668922,
+     "block_timestamp": 1794076830024827024,
+     "id": "G5b71czEYi4U8AaZ8br7yPQFxCQ6rFdACyDvHJcXS2s2",
+     "index": 1,
+     "outcome": {
+      "executor_id": "testnet",
+      "gas_burnt": 223182562500,
+      "logs": [],
+      "receipt_ids": [],
+      "status": {
+       "SuccessValue": ""
+      },
+      "tokens_burnt": "0"
+     }
+    },
+    "receipt": {
+     "block_hash": "3e9SJWPX12evfTFvLNcQnzmqP6Fps91XTV3vVF3KfgLk",
+     "block_height": 276668922,
+     "block_timestamp": 1794076830024827024,
+     "predecessor_id": "system",
+     "priority": 0,
+     "receipt": {
+      "Action": {
+       "actions": [
+        {
+         "Transfer": {
+          "deposit": "492452918750000000000"
+         }
+        }
+       ],
+       "gas_price": "0",
+       "input_data_ids": [],
+       "is_promise_yield": false,
+       "output_data_receivers": [],
+       "signer_id": "testnet",
+       "signer_public_key": "ed25519:4XhhXfW316DeAYBTxQe7Z15WostJptFpnXdv57KtXVNC"
+      }
+     },
+     "receipt_id": "G5b71czEYi4U8AaZ8br7yPQFxCQ6rFdACyDvHJcXS2s2",
+     "receipt_index": 4,
+     "receiver_id": "testnet"
+    }
+   }
+  ],
+  "transaction": {
+   "actions": [
+    "CreateAccount",
+    {
+     "Transfer": {
+      "deposit": "10000000000000000000000000"
+     }
+    },
+    {
+     "AddKey": {
+      "access_key": {
+       "nonce": 0,
+       "permission": "FullAccess"
+      },
+      "public_key": "ed25519:4hUGS8eDEZn488NY9oUXVXJTqX4ZS9UPrSGAbRnEoC7c"
+     }
+    }
+   ],
+   "hash": "3LLY3UCsbVgrC2PEoJJwNF56rn5snxzqveGvb5HNj2QK",
+   "nonce": 51910588664689,
+   "priority_fee": 0,
+   "public_key": "ed25519:4XhhXfW316DeAYBTxQe7Z15WostJptFpnXdv57KtXVNC",
+   "receiver_id": "pac-mig5-mw6r0o9ob.testnet",
+   "signer_id": "testnet"
+  }
+ }
+}
