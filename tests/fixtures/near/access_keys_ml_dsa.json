@@ -1,0 +1,50 @@
+{
+ "id": "1",
+ "jsonrpc": "2.0",
+ "result": {
+  "block_hash": "8pFiu7ELnafjsv6kBz8RDtotU7uC3BFFfDmrVtH12anC",
+  "block_height": 276819332,
+  "keys": [
+   {
+    "access_key": {
+     "nonce": 275840254000002,
+     "permission": {
+      "FunctionCall": {
+       "allowance": null,
+       "method_names": [
+        "execute",
+        "execute_many",
+        "run",
+        "cancel",
+        "set_protection",
+        "add_second_device",
+        "remove_key",
+        "set_recovery_key",
+        "cancel_recovery",
+        "upgrade"
+       ],
+       "receiver_id": "zf-b6bc410f46.testnet"
+      }
+     }
+    },
+    "public_key": "ml-dsa-65-hash:2A4BC96GMxoFEpNzwXsfa3uR2ZmLH6mRhMwnzKK28NKB"
+   },
+   {
+    "access_key": {
+     "nonce": 275752551000060,
+     "permission": {
+      "FunctionCall": {
+       "allowance": "219070617444384000000000",
+       "method_names": [
+        "start_recovery",
+        "finish_recovery"
+       ],
+       "receiver_id": "zf-b6bc410f46.testnet"
+      }
+     }
+    },
+    "public_key": "ml-dsa-65-hash:AdPuRCQQF7GLAQMBK8D6f7Er6azqKfPq66v8q9yAF9f1"
+   }
+  ]
+ }
+}
