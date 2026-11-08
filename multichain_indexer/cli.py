@@ -21,6 +21,12 @@ from multichain_indexer.core.models import SyncResult, TransactionRecord
 from multichain_indexer.core.observability import configure_logging
 from multichain_indexer.core.registry import PLANNED_CHAINS
 
+if sys.platform == "win32":
+    import ctypes
+    import msvcrt
+else:
+    import select
+
 _P = ParamSpec("_P")
 _T = TypeVar("_T")
 
@@ -29,6 +35,9 @@ DEFAULT_RECENT_TRANSACTIONS = 10
 EXIT_OUTPUT_CLOSED = 1
 # A write to a closed pipe fails with EPIPE on Linux and EINVAL on Windows.
 CLOSED_PIPE_ERRNOS = frozenset({errno.EPIPE, errno.EINVAL})
+# What Windows reports for a write to a pipe whose reader has gone: ERROR_NO_DATA ("the pipe
+# is being closed") and ERROR_BROKEN_PIPE.
+WINDOWS_CLOSED_PIPE_ERRORS = frozenset({232, 109})
 
 
 class _Options:
@@ -244,11 +253,12 @@ def main() -> None:
 
 
 def _is_closed_output(error: OSError) -> bool:
-    # EINVAL has other causes, such as a bad export path. Only a stream that still
-    # cannot flush proves the error came from the output closing.
+    # EINVAL has other causes, such as a bad export path, so the error alone proves nothing.
+    # A stream that still cannot flush proves it. When the failed write was larger than the
+    # stream's buffer, nothing is left to flush, so the pipe itself is asked.
     if error.errno not in CLOSED_PIPE_ERRNOS:
         return False
-    return any(_cannot_flush(stream) for stream in (sys.stdout, sys.stderr))
+    return any(_cannot_flush(stream) or _reader_gone(stream) for stream in (sys.stdout, sys.stderr))
 
 
 def _cannot_flush(stream: TextIO) -> bool:
@@ -257,6 +267,36 @@ def _cannot_flush(stream: TextIO) -> bool:
     except OSError:
         return True
     return False
+
+
+def _reader_gone(stream: TextIO) -> bool:
+    """Say whether ``stream`` is a pipe whose reader has gone, without writing to it."""
+    try:
+        return _pipe_closed(stream.fileno())
+    except (OSError, ValueError):
+        return False
+
+
+if sys.platform == "win32":
+
+    def _pipe_closed(descriptor: int) -> bool:
+        # A write of no bytes still reaches the pipe, which refuses it once its reader has
+        # gone; on a healthy stream it writes nothing. Python's own zero-length write
+        # returns before reaching the pipe, so WriteFile is called directly.
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        written = ctypes.c_ulong(0)
+        handle = msvcrt.get_osfhandle(descriptor)
+        if kernel32.WriteFile(handle, None, 0, ctypes.byref(written), None):
+            return False
+        return ctypes.get_last_error() in WINDOWS_CLOSED_PIPE_ERRORS
+
+else:
+
+    def _pipe_closed(descriptor: int) -> bool:
+        # The kernel flags an error on a pipe's write end once no reader is left.
+        poller = select.poll()
+        poller.register(descriptor, select.POLLOUT)
+        return any(events & select.POLLERR for _, events in poller.poll(0))
 
 
 def _discard_pending_output() -> None:

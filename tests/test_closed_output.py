@@ -15,12 +15,28 @@ from pathlib import Path
 import pytest
 
 from multichain_indexer import cli as cli_module
-from tests.conftest import FakeNode, Reply, load_fixture
+from multichain_indexer.adapters.algorand.parser import parse_transaction as parse_algorand
+from multichain_indexer.adapters.near.fastnear import _executed_transaction, _RawTransaction
+from multichain_indexer.adapters.near.parser import parse_transaction as parse_near
+from multichain_indexer.adapters.solana.parser import parse_transaction as parse_solana
+from multichain_indexer.core.models import TransactionRecord
+from multichain_indexer.core.storage import SQLiteStorage
+from tests.conftest import (
+    FakeNode,
+    Reply,
+    load_fixture,
+    load_near_fixture,
+    load_solana_fixture,
+)
 
 COMMAND = [sys.executable, "-c", "from multichain_indexer.cli import main; main()"]
 TIMEOUT_SECONDS = 60
 ACCOUNT = "JCN7TCSQEG6YHAQ7F6BS73J2UDXI2L7S7WJU35LYMIK22IL264ZRJO55QM"
 SIGNS_OF_A_RAW_FAILURE = ("Traceback", "Exception ignored", "OSError", "BrokenPipeError")
+# Larger than any pipe buffer (64 KiB on Linux, 4 KiB from subprocess on Windows) and than
+# Python's own 8 KiB stream buffer, so one write goes straight to the pipe and fails there.
+LARGE_OUTPUT_BYTES = 256 * 1024
+CHAINS = ("algorand", "solana", "near")
 
 
 def environment(node: FakeNode | None = None) -> dict[str, str]:
@@ -163,3 +179,111 @@ def test_other_os_errors_are_not_hidden(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(sys, "stdout", Stream(closed=True))
     with pytest.raises(OSError, match="disk full"):
         cli_module.main()
+
+
+def real_records(chain: str) -> list[TransactionRecord]:
+    """A few real transactions of ``chain``, parsed as a sync would store them."""
+    if chain == "algorand":
+        return [parse_algorand(load_fixture(name), "testnet") for name in ("tx_pay", "tx_appl")]
+    if chain == "solana":
+        return [
+            parse_solana(load_solana_fixture(name), "devnet", "finalized")
+            for name in ("history_0", "tx_spl_transfer")
+        ]
+    raws = (load_near_fixture(name)["transaction"] for name in ("tx_transfer", "tx_delegate"))
+    return [
+        parse_near(_executed_transaction(_RawTransaction.model_validate(raw)), "testnet")
+        for raw in raws
+    ]
+
+
+def store_large_history(chain: str, tmp_path: Path) -> None:
+    """Fill the database the command line will read with more than any pipe can hold."""
+    originals = real_records(chain)
+    size = sum(len(record.model_dump_json()) for record in originals)
+    copies = LARGE_OUTPUT_BYTES // size + 1
+    records = [
+        record.model_copy(update={"id": f"{record.id}-{copy}"})
+        for copy in range(copies)
+        for record in originals
+    ]
+    storage = SQLiteStorage(tmp_path / "x.db")
+    storage.save_transactions(chain, records[0].network, "account", records)
+    storage.close()
+
+
+@pytest.mark.parametrize("chain", CHAINS)
+def test_large_export_read_to_the_end_is_untouched(chain: str, tmp_path: Path) -> None:
+    store_large_history(chain, tmp_path)
+    process = start(["--chain", chain, "export", "--format", "json"], tmp_path)
+    output, errors = process.communicate(timeout=TIMEOUT_SECONDS)
+    assert process.returncode == 0
+    assert len(output) > LARGE_OUTPUT_BYTES
+    assert errors == b""
+
+
+@pytest.mark.parametrize("chain", CHAINS)
+def test_reader_gone_before_a_write_larger_than_the_buffer(chain: str, tmp_path: Path) -> None:
+    """As in ``export ... | true``: the one large write fails, and nothing is left to flush."""
+    store_large_history(chain, tmp_path)
+    process = start(["--chain", chain, "export", "--format", "json"], tmp_path)
+    process.stdout.close()
+    assert_quiet_exit(*finish(process))
+
+
+@pytest.mark.parametrize("chain", CHAINS)
+def test_reader_gone_before_a_small_output(chain: str, tmp_path: Path) -> None:
+    """Small output is still in the stream's buffer when it fails, at the flush."""
+    store_large_history(chain, tmp_path)
+    process = start(["--chain", chain, "metrics", "--days", "36500"], tmp_path)
+    process.stdout.close()
+    assert_quiet_exit(*finish(process))
+
+
+@pytest.mark.parametrize("chain", CHAINS)
+def test_reader_gone_after_the_first_line_of_a_large_export(chain: str, tmp_path: Path) -> None:
+    """As in ``export ... | head -1``."""
+    store_large_history(chain, tmp_path)
+    process = start(["--chain", chain, "export", "--format", "json"], tmp_path)
+    assert process.stdout.readline().strip() == b"["
+    process.stdout.close()
+    assert_quiet_exit(*finish(process))
+
+
+def test_pipe_with_its_reader_gone_is_recognised_without_writing() -> None:
+    reader, writer = os.pipe()
+    try:
+        assert not cli_module._pipe_closed(writer)
+        os.close(reader)
+        assert cli_module._pipe_closed(writer)
+    finally:
+        os.close(writer)
+
+
+def test_healthy_file_is_not_taken_for_a_closed_pipe(tmp_path: Path) -> None:
+    with (tmp_path / "out.txt").open("w") as healthy:
+        assert not cli_module._pipe_closed(healthy.fileno())
+    assert (tmp_path / "out.txt").read_text() == ""
+
+
+def test_stream_without_a_descriptor_is_not_taken_for_a_closed_pipe() -> None:
+    class Detached:
+        def fileno(self) -> int:
+            raise ValueError("no descriptor")
+
+    assert not cli_module._reader_gone(Detached())  # type: ignore[arg-type]
+
+
+def test_closed_pipe_with_nothing_left_to_flush_ends_quietly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(cli_module, "cli", raising(OSError(errno.EINVAL, "closed")))
+    monkeypatch.setattr(sys, "stdout", Stream(closed=False))
+    monkeypatch.setattr(sys, "stderr", Stream(closed=False))
+    monkeypatch.setattr(cli_module, "_reader_gone", lambda stream: stream is sys.stdout)
+    monkeypatch.setattr(os, "dup2", lambda source, target: None)
+
+    with pytest.raises(SystemExit) as stopped:
+        cli_module.main()
+
+    assert stopped.value.code == cli_module.EXIT_OUTPUT_CLOSED
