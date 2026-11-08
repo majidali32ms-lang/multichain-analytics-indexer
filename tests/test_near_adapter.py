@@ -9,6 +9,7 @@ from typing import Any
 
 import pandas as pd
 import pytest
+from click.testing import CliRunner, Result
 from pydantic import SecretStr
 
 from multichain_indexer import (
@@ -27,6 +28,7 @@ from multichain_indexer.adapters.near import adapter as adapter_module
 from multichain_indexer.adapters.near import fastnear as fastnear_module
 from multichain_indexer.adapters.near.fastnear import _executed_transaction, _RawTransaction
 from multichain_indexer.adapters.near.history import ExecutedTransaction, HistoryPage
+from multichain_indexer.cli import cli
 from multichain_indexer.core.config import Settings
 from tests.conftest import FakeNode, Reply
 from tests.conftest import load_near_fixture as fixture
@@ -796,3 +798,94 @@ def test_metrics_through_the_api(node: FakeNode, near_settings: Settings) -> Non
     assert report.total_fees == report.native["fees_yoctonear"]
     assert "function_calls_by_method" in report.native
     assert sum(report.transactions_per_day.values()) == 22
+
+
+@pytest.fixture
+def invoke(node: FakeNode, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
+    node.routes["rpc:status"] = rpc_ok({"chain_id": "testnet"})
+    node.routes["rpc:block"] = rpc_ok({"header": {"height": FINAL_HEAD}})
+    node.routes[BLOCKS_PATH] = Reply({"blocks": [{"block_height": INDEXED_HEAD}]})
+    node.routes["rpc:EXPERIMENTAL_protocol_config"] = rpc_ok(
+        {"shard_layout": fixture("rpc_shard_layout")["result"]["shard_layout"]}
+    )
+    monkeypatch.setenv("NEAR_TESTNET_RPC_SERVER", node.url)
+    monkeypatch.setenv("NEAR_TESTNET_HISTORY_SERVER", node.url)
+    monkeypatch.setenv("ALGORAND_TESTNET_INDEXER_SERVER", node.url)
+    monkeypatch.setenv("MCI_MAX_RETRIES", "0")
+    monkeypatch.setenv("MCI_REQUESTS_PER_SECOND", "1000")
+
+    def run(*arguments: str) -> Result:
+        options = ["--db", str(tmp_path / "cli.db"), "--env-file", str(tmp_path / "none.env")]
+        return CliRunner().invoke(cli, [*options, *arguments])
+
+    return run
+
+
+def test_cli_index_account_uses_near_terms(node: FakeNode, invoke: Any) -> None:
+    raw = script_one_transaction(node)
+    node.routes["rpc:query"] = [
+        Reply(fixture("account_named")),
+        Reply(fixture("access_keys_function_call")),
+    ]
+    result = invoke("--chain", "near", "index", "account", "calmhare3618.testnet")
+    assert result.exit_code == 0, result.output
+    assert "NEAR" in result.stdout
+    assert "Tgas" in result.stdout
+    assert "function-call" in result.stdout
+    assert "Shard" in result.stdout
+    assert raw["transaction"]["hash"] in result.stdout
+
+
+def test_cli_index_contract(node: FakeNode, invoke: Any) -> None:
+    node.routes["rpc:query"] = Reply(fixture("account_contract"))
+    result = invoke("--chain", "near", "index", "contract", ACCOUNT)
+    assert result.exit_code == 0, result.output
+    assert "Code hash" in result.stdout
+    assert "Global contract" in result.stdout
+
+
+def test_cli_index_contract_is_for_near_only(invoke: Any) -> None:
+    result = invoke("index", "contract", ACCOUNT)
+    assert result.exit_code == 1
+    assert "index contract is for near, not algorand" in result.output
+
+
+def test_cli_other_chains_lookups_are_refused_on_near(invoke: Any) -> None:
+    assert "for solana" in invoke("--chain", "near", "index", "token", "wrap.testnet").output
+    assert "for algorand" in invoke("--chain", "near", "index", "app", "5").output
+
+
+def test_cli_sync_metrics_and_export(node: FakeNode, invoke: Any, tmp_path: Path) -> None:
+    script_two_pages(node)
+    synced = invoke("--chain", "near", "sync", ACCOUNT)
+    assert synced.exit_code == 0, synced.output
+    assert "22 transactions" in synced.stdout
+
+    report = json.loads(invoke("--chain", "near", "metrics", "--days", "36500").stdout)
+    assert report["chain"] == "near"
+    assert report["native"]["fees_near"]
+
+    output = tmp_path / "records.parquet"
+    exported = invoke("--chain", "near", "export", "--format", "parquet", "--output", str(output))
+    assert exported.exit_code == 0, exported.output
+    assert len(pd.read_parquet(output)) == 22
+
+
+def test_cli_reports_the_wrong_network_without_the_endpoint_or_a_traceback(
+    node: FakeNode, invoke: Any
+) -> None:
+    node.routes["rpc:status"] = rpc_ok({"chain_id": "mainnet"})
+    result = invoke("--chain", "near", "index", "account", ACCOUNT)
+    assert result.exit_code == 1
+    assert "serves NEAR mainnet, not NEAR testnet" in result.output
+    assert "NEAR_TESTNET_RPC_SERVER" in result.output
+    assert node.url not in result.output
+    assert isinstance(result.exception, SystemExit)
+
+
+@pytest.mark.parametrize("account", ["BAD", "a", "x..y"])
+def test_cli_reports_a_bad_account_id_in_one_clean_line(invoke: Any, account: str) -> None:
+    result = invoke("--chain", "near", "index", "account", account)
+    assert result.exit_code == 1
+    assert "not a valid NEAR account ID" in result.output
+    assert isinstance(result.exception, SystemExit)
