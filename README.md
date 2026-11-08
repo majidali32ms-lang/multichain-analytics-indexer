@@ -330,6 +330,20 @@ burnt. Accounts include their kind, access keys with their permissions, and thei
 - `status` is `pending` until the receipts that decide it have run. Transactions in the last
   300 blocks are fetched again on the next sync.
 
+## Post-quantum signatures
+
+Algorand transactions signed by native Falcon-1024 accounts (`pqsig`, scheme `f1`) and NEAR
+keys and transactions using ML-DSA-65 carry a `pq` field in their `native` block, and metrics
+report their share. Nothing else is live on any planned chain yet.
+
+```bash
+multichain-indexer pq-status
+```
+
+Each row of its output has the chain's status, its source and the date it was checked. The
+[post-quantum page](https://majidali32ms-lang.github.io/multichain-analytics-indexer/post-quantum/)
+has the full table, what is counted, and its limits.
+
 ## How it is built
 
 ```text
@@ -351,6 +365,7 @@ multichain_indexer/
   adapters/algorand/  client, parser, metrics
   adapters/solana/    client, parser, metrics
   adapters/near/      client, parser, metrics, and pluggable history sources
+  pq/                 post-quantum detection shared by the adapters, and each chain's status
 ```
 
 A sync can be stopped at any point and picks up where it left off. It walks a fixed
@@ -392,10 +407,11 @@ runs the ones that talk to testnet. [CONTRIBUTING.md](CONTRIBUTING.md) has the r
 | 0.1 | Core and Algorand |
 | 0.2 | Solana: SPL tokens, programs, compute units, priority fees |
 | 0.3 | NEAR: named accounts, receipts, function calls, access keys |
-| 0.4 | EVM chains: Ethereum, Arbitrum, Optimism, Base, Polygon PoS, BNB Smart Chain |
-| 0.5 | Bitcoin: UTXOs, address types, fee rates |
-| 0.6 | Cross-chain metrics and reports, PostgreSQL, a read-only HTTP API, follow mode, plugins, Docker |
-| 0.7 | Wallet utilities: pre-flight checks, simulation, signing on test networks first |
+| 0.4 | Post-quantum readiness: Falcon-1024 on Algorand, ML-DSA-65 on NEAR, a dated status for every chain |
+| 0.5 | EVM chains: Ethereum, Arbitrum, Optimism, Base, Polygon PoS, BNB Smart Chain |
+| 0.6 | Bitcoin: UTXOs, address types, fee rates, quantum-exposed outputs |
+| 0.7 | Cross-chain metrics and reports, PostgreSQL, a read-only HTTP API, follow mode, plugins, Docker |
+| 0.8 | Wallet utilities: pre-flight checks, simulation, signing on test networks first |
 | 1.0 | Stable release on PyPI, with a docs page and demo per chain |
 
 ## License
