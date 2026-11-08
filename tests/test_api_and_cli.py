@@ -125,7 +125,7 @@ def test_metrics_cover_the_window_and_validate_days(node: FakeNode, settings: Se
 
 def test_unsupported_chain_is_refused(settings: Settings) -> None:
     with pytest.raises(UnsupportedChain, match="later version"):
-        Indexer("near", settings=settings)
+        Indexer("ethereum", settings=settings)
 
 
 def test_cache_is_used_for_pinned_history(
@@ -229,7 +229,7 @@ def test_cli_export_to_stdout_and_file(node: FakeNode, invoke: Invoke, tmp_path:
         (("index", "asset", "abc"), "ASA ID"),
         (("index", "app", "0"), "app ID"),
         (("sync", "BAD"), "not a valid Algorand address"),
-        (("--chain", "near", "metrics"), "later version"),
+        (("--chain", "ethereum", "metrics"), "later version"),
         (("export", "--format", "parquet"), "--output"),
     ],
 )

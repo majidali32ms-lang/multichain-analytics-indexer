@@ -1,1 +1,3 @@
-"""NEAR: account state over JSON-RPC, history from an indexing service."""
+from multichain_indexer.adapters.near.adapter import NearIndexer, create_indexer
+
+__all__ = ["NearIndexer", "create_indexer"]
