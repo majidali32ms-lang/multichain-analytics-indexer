@@ -54,6 +54,15 @@ DEFAULT_RPC_REQUESTS_PER_SECOND = 1.0
 DEFAULT_HISTORY_SOURCE = "fastnear"
 HISTORY_SOURCES: dict[str, HistorySourceFactory] = {"fastnear": create_fastnear_history}
 
+# Which of the transactions a history service links to an account are its history. "direct"
+# keeps those the account signed or received, which is the set NearBlocks lists: in every
+# sample checked against it, the two sets were the same. "all" also keeps transactions where
+# the account only received a receipt, or appears in an action's arguments or an event log.
+SCOPE_DIRECT = "direct"
+SCOPE_ALL = "all"
+HISTORY_SCOPES = (SCOPE_DIRECT, SCOPE_ALL)
+DEFAULT_HISTORY_SCOPE = SCOPE_DIRECT
+
 # Receipts run in the blocks after their transaction. Records this close to the head are
 # fetched again on the next sync, so one still executing is not left unfinished.
 FINALITY_MARGIN_BLOCKS = 300
@@ -72,10 +81,17 @@ PROFILE = ChainProfile(
 class NearIndexer(BaseIndexer):
     profile = PROFILE
 
-    def __init__(self, network: str, rpc: NearRpc, history: HistorySource) -> None:
+    def __init__(
+        self,
+        network: str,
+        rpc: NearRpc,
+        history: HistorySource,
+        scope: str = DEFAULT_HISTORY_SCOPE,
+    ) -> None:
         super().__init__(network)
         self._rpc = rpc
         self._history = history
+        self._scope = scope
         self._network_confirmed = False
 
     def validate_address(self, address: str) -> str:
@@ -132,8 +148,12 @@ class NearIndexer(BaseIndexer):
                 cursor=next_cursor,
                 immutable_up_to=immutable_up_to,
             )
-            if page.transactions:
-                records = tuple(parse_transaction(tx, self.network) for tx in page.transactions)
+            records = tuple(
+                record
+                for record in (parse_transaction(tx, self.network) for tx in page.transactions)
+                if self._in_scope(record, account)
+            )
+            if records:
                 yield TransactionPage(records=records, next_cursor=page.next_cursor)
             if page.next_cursor is None:
                 return
@@ -158,6 +178,9 @@ class NearIndexer(BaseIndexer):
     async def aclose(self) -> None:
         await self._rpc.aclose()
         await self._history.aclose()
+
+    def _in_scope(self, record: TransactionRecord, account: str) -> bool:
+        return self._scope == SCOPE_ALL or account in (record.sender, record.receiver)
 
     async def _account_state(self, account: str) -> JsonValue | None:
         try:
@@ -193,7 +216,21 @@ def create_indexer(
         max_retries=settings.max_retries,
         limiter=RateLimiter(_rpc_requests_per_second(settings)),
     )
-    return NearIndexer(chosen, NearRpc(client), _history_source(chosen, settings, cache))
+    return NearIndexer(
+        chosen,
+        NearRpc(client),
+        _history_source(chosen, settings, cache),
+        _history_scope(chosen, settings),
+    )
+
+
+def _history_scope(network: str, settings: Settings) -> str:
+    configured = settings.chain_setting(CHAIN, network, "HISTORY_SCOPE")
+    scope = configured.get_secret_value() if configured else DEFAULT_HISTORY_SCOPE
+    if scope not in HISTORY_SCOPES:
+        setting = f"{CHAIN}_{network}_HISTORY_SCOPE".upper()
+        raise ConfigError(f"{setting} must be one of: {', '.join(HISTORY_SCOPES)}")
+    return scope
 
 
 def _history_source(network: str, settings: Settings, cache: ResponseStore | None) -> HistorySource:

@@ -34,6 +34,12 @@ from tests.conftest import FakeNode, Reply
 from tests.conftest import load_near_fixture as fixture
 
 ACCOUNT = "guest-book.testnet"
+HISTORY_ACCOUNT = fixture("history_pages")["account"]
+TRANSFER_SIGNER = fixture("tx_transfer")["transaction"]["transaction"]["signer_id"]
+FUNCTION_CALL_SIGNER = fixture("tx_function_call")["transaction"]["transaction"]["signer_id"]
+# The saved history holds 22 transactions; HISTORY_ACCOUNT signed or received 20 of them.
+ALL_IN_HISTORY = 22
+DIRECT_IN_HISTORY = 20
 FINAL_HEAD = 276_700_000
 INDEXED_HEAD = FINAL_HEAD - 7
 ACCOUNT_PATH = "/v0/account"
@@ -75,7 +81,7 @@ def script_two_pages(node: FakeNode) -> list[dict[str, Any]]:
 def script_one_transaction(node: FakeNode, name: str = "tx_transfer") -> dict[str, Any]:
     raw = fixture(name)["transaction"]
     row = {
-        "account_id": ACCOUNT,
+        "account_id": raw["transaction"]["signer_id"],
         "transaction_hash": raw["transaction"]["hash"],
         "tx_block_height": raw["execution_outcome"]["block_height"],
         "is_success": fixture(name)["is_success"],
@@ -87,6 +93,27 @@ def script_one_transaction(node: FakeNode, name: str = "tx_transfer") -> dict[st
 
 def hashes_of(page: dict[str, Any]) -> list[str]:
     return [row["transaction_hash"] for row in page["rows"]["account_txs"]]
+
+
+def direct_hashes(page: dict[str, Any]) -> list[str]:
+    """The page's transactions that HISTORY_ACCOUNT signed or received, in row order."""
+    direct = {
+        tx["transaction"]["hash"]
+        for tx in page["transactions"]
+        if HISTORY_ACCOUNT in (tx["transaction"]["signer_id"], tx["transaction"]["receiver_id"])
+    }
+    return [tx_hash for tx_hash in hashes_of(page) if tx_hash in direct]
+
+
+def with_scope(settings: Settings, scope: str) -> Settings:
+    env = {**settings.env, "NEAR_TESTNET_HISTORY_SCOPE": SecretStr(scope)}
+    return settings.model_copy(update={"env": env})
+
+
+def test_saved_history_has_both_kinds_of_transaction() -> None:
+    pages = history_pages()
+    assert sum(len(hashes_of(page)) for page in pages) == ALL_IN_HISTORY
+    assert sum(len(direct_hashes(page)) for page in pages) == DIRECT_IN_HISTORY
 
 
 @pytest.fixture
@@ -339,15 +366,15 @@ def indexer_sync(near_settings: Settings) -> NearIndexer:
 
 async def test_history_walks_every_page(node: FakeNode, indexer: NearIndexer) -> None:
     pages = script_two_pages(node)
-    found = [page async for page in indexer.iter_account_transactions(ACCOUNT)]
+    found = [page async for page in indexer.iter_account_transactions(HISTORY_ACCOUNT)]
 
-    assert [len(page.records) for page in found] == [20, 2]
+    assert [len(page.records) for page in found] == [18, 2]
     assert found[0].next_cursor == pages[0]["rows"]["resume_token"]
     assert found[1].next_cursor is None
-    assert [r.id for r in found[0].records] == hashes_of(pages[0])
+    assert [r.id for r in found[0].records] == direct_hashes(pages[0])
 
     first, second = node.posted_to(ACCOUNT_PATH)
-    assert first == {"account_id": ACCOUNT, "limit": 20, "desc": True}
+    assert first == {"account_id": HISTORY_ACCOUNT, "limit": 20, "desc": True}
     assert second == {**first, "resume_token": pages[0]["rows"]["resume_token"]}
     assert [body["tx_hashes"] for body in node.posted_to(TRANSACTIONS_PATH)] == [
         hashes_of(page) for page in pages
@@ -358,16 +385,18 @@ async def test_requests_are_counted_across_rpc_and_history(
     node: FakeNode, indexer: NearIndexer
 ) -> None:
     script_two_pages(node)
-    [page async for page in indexer.iter_account_transactions(ACCOUNT)]
+    [page async for page in indexer.iter_account_transactions(HISTORY_ACCOUNT)]
     assert indexer.requests_made == 1 + 4
 
 
 async def test_history_passes_the_height_range(node: FakeNode, indexer: NearIndexer) -> None:
     script_one_transaction(node)
-    pages = indexer.iter_account_transactions(ACCOUNT, from_height=5, to_height=9, cursor="abc")
+    pages = indexer.iter_account_transactions(
+        TRANSFER_SIGNER, from_height=5, to_height=9, cursor="abc"
+    )
     [page async for page in pages]
     assert node.posted_to(ACCOUNT_PATH)[0] == {
-        "account_id": ACCOUNT,
+        "account_id": TRANSFER_SIGNER,
         "limit": 20,
         "desc": True,
         "from_tx_block_height": 5,
@@ -389,14 +418,14 @@ async def test_transaction_the_service_left_out_stops_the_page(
     left_out, *returned = pages[0]["transactions"]
     node.routes[TRANSACTIONS_PATH] = Reply({"transactions": returned})
     with pytest.raises(MalformedResponse, match=left_out["transaction"]["hash"]):
-        [page async for page in indexer.iter_account_transactions(ACCOUNT)]
+        [page async for page in indexer.iter_account_transactions(HISTORY_ACCOUNT)]
 
 
 async def test_same_hash_listed_twice_is_fetched_once(node: FakeNode, indexer: NearIndexer) -> None:
     raw = script_one_transaction(node)
     row = node.routes[ACCOUNT_PATH].body["account_txs"][0]  # type: ignore[union-attr]
     node.routes[ACCOUNT_PATH] = Reply({"account_txs": [row, row]})
-    page = await anext(indexer.iter_account_transactions(ACCOUNT))
+    page = await anext(indexer.iter_account_transactions(TRANSFER_SIGNER))
     assert [record.id for record in page.records] == [raw["transaction"]["hash"]]
     assert node.posted_to(TRANSACTIONS_PATH)[0]["tx_hashes"] == [raw["transaction"]["hash"]]
 
@@ -407,7 +436,7 @@ async def test_receipt_with_no_outcome_yet_leaves_the_transaction_pending(
     raw = script_one_transaction(node)
     for receipt in raw["receipts"]:
         receipt["execution_outcome"] = None
-    page = await anext(indexer.iter_account_transactions(ACCOUNT))
+    page = await anext(indexer.iter_account_transactions(TRANSFER_SIGNER))
     assert page.records[0].status.value == "pending"
     assert page.records[0].native.receipts == ()
 
@@ -426,7 +455,7 @@ async def test_malformed_history_is_reported(
     script_one_transaction(node)
     node.routes[path] = Reply(body)
     with pytest.raises(MalformedResponse, match=message):
-        await anext(indexer.iter_account_transactions(ACCOUNT))
+        await anext(indexer.iter_account_transactions(TRANSFER_SIGNER))
 
 
 @pytest.mark.parametrize("body", [{"blocks": []}, {"blocks": [{}]}, {"nope": 1}])
@@ -511,7 +540,7 @@ async def test_api_key_goes_to_the_history_service_only_when_set(
 ) -> None:
     script_one_transaction(node)
     without_key = create_indexer(None, near_settings)
-    await anext(without_key.iter_account_transactions(ACCOUNT))
+    await anext(without_key.iter_account_transactions(TRANSFER_SIGNER))
     await without_key.aclose()
     assert not any("Authorization" in headers for headers in node.received_headers)
 
@@ -520,7 +549,7 @@ async def test_api_key_goes_to_the_history_service_only_when_set(
     env = {**near_settings.env, "NEAR_TESTNET_HISTORY_API_KEY": SecretStr(API_KEY)}
     with_key = create_indexer(None, near_settings.model_copy(update={"env": env}))
     script_one_transaction(node)
-    await anext(with_key.iter_account_transactions(ACCOUNT))
+    await anext(with_key.iter_account_transactions(TRANSFER_SIGNER))
     await with_key.aclose()
     authorised = [h["Authorization"] for h in node.received_headers if "Authorization" in h]
     assert authorised == [f"Bearer {API_KEY}", f"Bearer {API_KEY}"]
@@ -575,7 +604,7 @@ def test_a_history_source_can_be_added_without_touching_parser_or_core(
     monkeypatch.setitem(adapter_module.HISTORY_SOURCES, "other", factory)
     env = {**near_settings.env, "NEAR_TESTNET_HISTORY_SOURCE": SecretStr("other")}
     with Indexer("near", settings=near_settings.model_copy(update={"env": env})) as indexer:
-        result = indexer.sync(ACCOUNT)
+        result = indexer.sync(TRANSFER_SIGNER)
         stored = indexer.stored_transactions()
 
     assert seen == ["testnet"]
@@ -630,8 +659,8 @@ def test_sync_stores_history_once_and_only_asks_for_new_blocks_after(
 ) -> None:
     pages = script_two_pages(node)
     with Indexer("near", settings=near_settings) as indexer:
-        first = indexer.sync(ACCOUNT)
-        assert first.records_fetched == 22
+        first = indexer.sync(HISTORY_ACCOUNT)
+        assert first.records_fetched == DIRECT_IN_HISTORY
         assert first.to_height == INDEXED_HEAD
         assert indexer.network == "testnet"
 
@@ -639,8 +668,8 @@ def test_sync_stores_history_once_and_only_asks_for_new_blocks_after(
         node.routes[ACCOUNT_PATH] = Reply({"account_txs": []})
         node.routes[BLOCKS_PATH] = Reply({"blocks": [{"block_height": INDEXED_HEAD + 500}]})
         node.routes["rpc:block"] = rpc_ok({"header": {"height": INDEXED_HEAD + 600}})
-        second = indexer.sync(ACCOUNT)
-        stored = indexer.stored_transactions(account=ACCOUNT)
+        second = indexer.sync(HISTORY_ACCOUNT)
+        stored = indexer.stored_transactions(account=HISTORY_ACCOUNT)
 
     margin = adapter_module.FINALITY_MARGIN_BLOCKS
     assert second.from_height == INDEXED_HEAD - margin + 1
@@ -648,8 +677,8 @@ def test_sync_stores_history_once_and_only_asks_for_new_blocks_after(
     body = node.posted_to(ACCOUNT_PATH)[0]
     assert body["from_tx_block_height"] == INDEXED_HEAD - margin + 1
     assert body["to_tx_block_height"] == INDEXED_HEAD + 500
-    assert len(stored) == 22
-    assert {record.id for record in stored} == {h for page in pages for h in hashes_of(page)}
+    assert len(stored) == DIRECT_IN_HISTORY
+    assert {record.id for record in stored} == {h for page in pages for h in direct_hashes(page)}
 
 
 def test_indexer_behind_the_chain_does_not_leave_a_gap(
@@ -677,14 +706,14 @@ def test_interrupted_sync_resumes_from_the_stored_cursor(
     ]
     node.routes[TRANSACTIONS_PATH] = transactions_reply(pages[0])
     with Indexer("near", settings=near_settings) as indexer, pytest.raises(NetworkError):
-        indexer.sync(ACCOUNT)
+        indexer.sync(HISTORY_ACCOUNT)
 
     node.post_bodies.clear()
     node.rpc_calls.clear()
     node.routes[ACCOUNT_PATH] = rows_reply(pages[1])
     node.routes[TRANSACTIONS_PATH] = transactions_reply(pages[1])
     with Indexer("near", settings=near_settings) as indexer:
-        resumed = indexer.sync(ACCOUNT)
+        resumed = indexer.sync(HISTORY_ACCOUNT)
 
     assert resumed.resumed
     assert resumed.records_fetched == 2
@@ -694,7 +723,7 @@ def test_interrupted_sync_resumes_from_the_stored_cursor(
     connection = sqlite3.connect(near_settings.database)
     ids = sorted(row[0] for row in connection.execute("SELECT tx_id FROM transactions"))
     connection.close()
-    assert ids == sorted(h for page in pages for h in hashes_of(page))
+    assert ids == sorted(h for page in pages for h in direct_hashes(page))
 
 
 def test_rejected_cursor_restarts_the_range(node: FakeNode, near_settings: Settings) -> None:
@@ -705,7 +734,7 @@ def test_rejected_cursor_restarts_the_range(node: FakeNode, near_settings: Setti
     ]
     node.routes[TRANSACTIONS_PATH] = transactions_reply(pages[0])
     with Indexer("near", settings=near_settings) as indexer, pytest.raises(NetworkError):
-        indexer.sync(ACCOUNT)
+        indexer.sync(HISTORY_ACCOUNT)
 
     node.routes[ACCOUNT_PATH] = [
         Reply({"error": "bad resume_token"}, status=400),
@@ -714,8 +743,8 @@ def test_rejected_cursor_restarts_the_range(node: FakeNode, near_settings: Setti
     ]
     node.routes[TRANSACTIONS_PATH] = [transactions_reply(pages[0]), transactions_reply(pages[1])]
     with Indexer("near", settings=near_settings) as indexer:
-        assert indexer.sync(ACCOUNT).records_fetched == 22
-        assert len(indexer.stored_transactions()) == 22
+        assert indexer.sync(HISTORY_ACCOUNT).records_fetched == DIRECT_IN_HISTORY
+        assert len(indexer.stored_transactions()) == DIRECT_IN_HISTORY
 
 
 def test_sync_against_another_network_stores_nothing(
@@ -734,14 +763,14 @@ def test_finished_transactions_are_cached_and_recent_ones_are_not(
     pages = script_two_pages(node)
     cached = near_settings.model_copy(update={"cache_path": tmp_path / "cache.db"})
     with Indexer("near", settings=cached) as indexer:
-        indexer.sync(ACCOUNT)
+        indexer.sync(HISTORY_ACCOUNT)
 
     node.post_bodies.clear()
     node.routes[ACCOUNT_PATH] = [rows_reply(page) for page in pages]
     node.routes[TRANSACTIONS_PATH] = [transactions_reply(page) for page in pages]
     fresh = cached.model_copy(update={"database": tmp_path / "other.db"})
     with Indexer("near", settings=fresh) as indexer:
-        assert indexer.sync(ACCOUNT).records_fetched == 22
+        assert indexer.sync(HISTORY_ACCOUNT).records_fetched == DIRECT_IN_HISTORY
     assert node.posted_to(TRANSACTIONS_PATH) == []
 
     newest = pages[0]["rows"]["account_txs"][0]["tx_block_height"]
@@ -750,7 +779,7 @@ def test_finished_transactions_are_cached_and_recent_ones_are_not(
     node.routes[TRANSACTIONS_PATH] = [transactions_reply(page) for page in pages]
     newer = cached.model_copy(update={"database": tmp_path / "third.db"})
     with Indexer("near", settings=newer) as indexer:
-        indexer.sync(ACCOUNT)
+        indexer.sync(HISTORY_ACCOUNT)
     assert len(node.posted_to(TRANSACTIONS_PATH)) >= 1
 
 
@@ -761,7 +790,7 @@ def test_transaction_with_crafted_arguments_cannot_stop_a_sync(
     crafted = base64.b64encode(b"[" * 150 + b"]" * 150).decode()
     raw["transaction"]["actions"][0]["FunctionCall"]["args"] = crafted
     with Indexer("near", settings=near_settings) as indexer:
-        assert indexer.sync(ACCOUNT).records_fetched == 1
+        assert indexer.sync(FUNCTION_CALL_SIGNER).records_fetched == 1
         action = indexer.stored_transactions()[0].native.actions[0]
         assert action.args_base64 == crafted
         assert indexer.metrics(days=36500).transactions == 1
@@ -776,7 +805,7 @@ def test_amounts_past_64_bits_stay_exact_in_every_format(
     amount = int(raw["transaction"]["actions"][0]["Transfer"]["deposit"])
     assert amount > 2**64
     with Indexer("near", settings=near_settings) as indexer:
-        indexer.sync(ACCOUNT)
+        indexer.sync(TRANSFER_SIGNER)
         record = indexer.stored_transactions()[0]
         assert record.amount == amount
         assert record.fee > 2**64
@@ -791,13 +820,13 @@ def test_amounts_past_64_bits_stay_exact_in_every_format(
 def test_metrics_through_the_api(node: FakeNode, near_settings: Settings) -> None:
     script_two_pages(node)
     with Indexer("near", settings=near_settings) as indexer:
-        indexer.sync(ACCOUNT)
-        report = indexer.metrics(days=36500, account=ACCOUNT)
+        indexer.sync(HISTORY_ACCOUNT)
+        report = indexer.metrics(days=36500, account=HISTORY_ACCOUNT)
     assert report.chain == "near"
-    assert report.transactions == 22
+    assert report.transactions == DIRECT_IN_HISTORY
     assert report.total_fees == report.native["fees_yoctonear"]
     assert "function_calls_by_method" in report.native
-    assert sum(report.transactions_per_day.values()) == 22
+    assert sum(report.transactions_per_day.values()) == DIRECT_IN_HISTORY
 
 
 @pytest.fixture
@@ -827,7 +856,7 @@ def test_cli_index_account_uses_near_terms(node: FakeNode, invoke: Any) -> None:
         Reply(fixture("account_named")),
         Reply(fixture("access_keys_function_call")),
     ]
-    result = invoke("--chain", "near", "index", "account", "calmhare3618.testnet")
+    result = invoke("--chain", "near", "index", "account", TRANSFER_SIGNER)
     assert result.exit_code == 0, result.output
     assert "NEAR" in result.stdout
     assert "Tgas" in result.stdout
@@ -857,9 +886,9 @@ def test_cli_other_chains_lookups_are_refused_on_near(invoke: Any) -> None:
 
 def test_cli_sync_metrics_and_export(node: FakeNode, invoke: Any, tmp_path: Path) -> None:
     script_two_pages(node)
-    synced = invoke("--chain", "near", "sync", ACCOUNT)
+    synced = invoke("--chain", "near", "sync", HISTORY_ACCOUNT)
     assert synced.exit_code == 0, synced.output
-    assert "22 transactions" in synced.stdout
+    assert f"{DIRECT_IN_HISTORY} transactions" in synced.stdout
 
     report = json.loads(invoke("--chain", "near", "metrics", "--days", "36500").stdout)
     assert report["chain"] == "near"
@@ -868,7 +897,7 @@ def test_cli_sync_metrics_and_export(node: FakeNode, invoke: Any, tmp_path: Path
     output = tmp_path / "records.parquet"
     exported = invoke("--chain", "near", "export", "--format", "parquet", "--output", str(output))
     assert exported.exit_code == 0, exported.output
-    assert len(pd.read_parquet(output)) == 22
+    assert len(pd.read_parquet(output)) == DIRECT_IN_HISTORY
 
 
 def test_cli_reports_the_wrong_network_without_the_endpoint_or_a_traceback(
@@ -889,3 +918,69 @@ def test_cli_reports_a_bad_account_id_in_one_clean_line(invoke: Any, account: st
     assert result.exit_code == 1
     assert "not a valid NEAR account ID" in result.output
     assert isinstance(result.exception, SystemExit)
+
+
+def test_default_scope_keeps_what_nearblocks_lists(node: FakeNode, near_settings: Settings) -> None:
+    pages = script_two_pages(node)
+    with Indexer("near", settings=near_settings) as indexer:
+        assert indexer.sync(HISTORY_ACCOUNT).records_fetched == DIRECT_IN_HISTORY
+        stored = indexer.stored_transactions(account=HISTORY_ACCOUNT)
+
+    assert all(HISTORY_ACCOUNT in (record.sender, record.receiver) for record in stored)
+    left_out = [
+        tx["transaction"]
+        for page in pages
+        for tx in page["transactions"]
+        if tx["transaction"]["hash"] not in {record.id for record in stored}
+    ]
+    assert len(left_out) == ALL_IN_HISTORY - DIRECT_IN_HISTORY
+    assert all(HISTORY_ACCOUNT not in (tx["signer_id"], tx["receiver_id"]) for tx in left_out)
+
+
+def test_scope_all_keeps_the_full_count(node: FakeNode, near_settings: Settings) -> None:
+    pages = script_two_pages(node)
+    with Indexer("near", settings=with_scope(near_settings, "all")) as indexer:
+        assert indexer.sync(HISTORY_ACCOUNT).records_fetched == ALL_IN_HISTORY
+        report = indexer.metrics(days=36500, account=HISTORY_ACCOUNT)
+        stored = indexer.stored_transactions(account=HISTORY_ACCOUNT)
+    assert report.transactions == ALL_IN_HISTORY
+    assert {record.id for record in stored} == {h for page in pages for h in hashes_of(page)}
+
+
+def test_scope_direct_can_also_be_named(near_settings: Settings) -> None:
+    adapter = create_indexer(None, with_scope(near_settings, "direct"))
+    assert adapter._scope == "direct"
+    assert create_indexer(None, near_settings)._scope == "direct"
+
+
+def test_unknown_scope_is_refused(near_settings: Settings) -> None:
+    with pytest.raises(ConfigError, match="NEAR_TESTNET_HISTORY_SCOPE must be one of: direct, all"):
+        create_indexer(None, with_scope(near_settings, "everything"))
+
+
+def test_page_with_nothing_in_scope_still_moves_to_the_next(
+    node: FakeNode, near_settings: Settings
+) -> None:
+    script_two_pages(node)
+    with Indexer("near", settings=near_settings) as indexer:
+        result = indexer.sync("someone-else.testnet")
+    assert result.records_fetched == 0
+    assert len(node.posted_to(ACCOUNT_PATH)) == 2
+    assert len(node.posted_to(TRANSACTIONS_PATH)) == 2
+
+
+def test_recent_transactions_follow_the_same_scope(node: FakeNode, near_settings: Settings) -> None:
+    script_two_pages(node)
+    with Indexer("near", settings=near_settings) as indexer:
+        recent = indexer.account_transactions(HISTORY_ACCOUNT, limit=50)
+    assert len(recent) == DIRECT_IN_HISTORY
+
+
+def test_cli_scope_all_gives_the_full_count(
+    node: FakeNode, invoke: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    script_two_pages(node)
+    monkeypatch.setenv("NEAR_TESTNET_HISTORY_SCOPE", "all")
+    synced = invoke("--chain", "near", "sync", HISTORY_ACCOUNT)
+    assert synced.exit_code == 0, synced.output
+    assert f"{ALL_IN_HISTORY} transactions" in synced.stdout
