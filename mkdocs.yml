@@ -12,4 +12,5 @@ nav:
   - Home: index.md
   - Algorand: chains/algorand.md
   - Solana: chains/solana.md
+  - NEAR: chains/near.md
   - Python API: api.md
