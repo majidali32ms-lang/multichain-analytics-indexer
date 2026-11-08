@@ -15,6 +15,8 @@ from multichain_indexer.pq import PqSignature
 from tests.conftest import load_near_fixture as fixture
 
 ML_DSA_ACCOUNT = "zf-b6bc410f46.testnet"
+# Holds eight ed25519 keys and one ML-DSA-65 key.
+MIXED_ACCOUNT = "calmhare3618.testnet"
 SHARD_LAYOUT = fixture("rpc_shard_layout")["result"]["shard_layout"]
 
 
@@ -70,8 +72,7 @@ def test_account_with_only_an_ed25519_key_is_not_post_quantum() -> None:
 
 
 def test_real_account_with_both_kinds_of_key() -> None:
-    """calmhare3618.testnet holds eight ed25519 keys and one ML-DSA-65 key."""
-    native = account_of("account_named", "access_keys_function_call", "calmhare3618.testnet")
+    native = account_of("account_named", "access_keys_function_call", MIXED_ACCOUNT)
     post_quantum = [key for key in native.access_keys if key.pq is not None]
     assert len(native.access_keys) == 9
     assert [key.public_key.split(":")[0] for key in post_quantum] == ["ml-dsa-65-hash"]
