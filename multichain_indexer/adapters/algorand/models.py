@@ -7,6 +7,7 @@ from enum import StrEnum
 from pydantic import Field
 
 from multichain_indexer.core.models import NativeData
+from multichain_indexer.pq import PqSignature
 
 
 class AsaAction(StrEnum):
@@ -40,7 +41,8 @@ class AlgorandTransaction(NativeData):
 
     The shared ``amount`` is in microAlgos for a payment and in the ASA's base units for
     an asset transfer. The shared ``fee`` covers this transaction and every inner
-    transaction it spawned; ``own_fee`` is this transaction's part alone.
+    transaction it spawned; ``own_fee`` is this transaction's part alone. ``pq`` is set when
+    a native post-quantum account signed it.
     """
 
     round: int = Field(ge=0)
@@ -60,6 +62,7 @@ class AlgorandTransaction(NativeData):
     auth_addr: str | None = None
     logs: tuple[AppLog, ...] = ()
     inner_transactions: tuple[AlgorandInnerTransaction, ...] = ()
+    pq: PqSignature | None = None
 
     @property
     def inner_count(self) -> int:
@@ -82,7 +85,10 @@ class AsaHolding(NativeData):
 
 
 class AlgorandAccount(NativeData):
-    """Account state. ``auth_addr`` is set only on a rekeyed account."""
+    """Account state. ``auth_addr`` is set only on a rekeyed account.
+
+    ``pq`` is set when the Indexer lists the account as signing with ``pqsig``.
+    """
 
     round: int = Field(ge=0)
     participation_status: str
@@ -95,6 +101,7 @@ class AlgorandAccount(NativeData):
     created_asas: int = Field(ge=0)
     created_apps: int = Field(ge=0)
     deleted: bool = False
+    pq: PqSignature | None = None
 
 
 class AlgorandAsset(NativeData):

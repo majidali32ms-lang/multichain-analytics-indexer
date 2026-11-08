@@ -9,12 +9,13 @@ from pydantic import JsonValue
 
 from multichain_indexer.adapters.algorand.models import AlgorandTransaction, AsaAction
 from multichain_indexer.core.models import TransactionRecord
+from multichain_indexer.pq import pq_share
 
 TOP_ASA_COUNT = 10
 
 
 def algorand_metrics(records: Sequence[TransactionRecord]) -> dict[str, JsonValue]:
-    """Return ASA, application, group and inner-transaction figures for ``records``."""
+    """Return ASA, application, group, inner-transaction and post-quantum figures."""
     natives = [r.native for r in records if isinstance(r.native, AlgorandTransaction)]
     asa_transfers = Counter(
         native.asa_id
@@ -29,6 +30,7 @@ def algorand_metrics(records: Sequence[TransactionRecord]) -> dict[str, JsonValu
         "group_transaction_share": grouped / len(natives) if natives else None,
         "inner_transactions": sum(native.inner_count for native in natives),
         "top_asas_by_transfers": _top_asas(asa_transfers),
+        "post_quantum": pq_share(records),
     }
 
 

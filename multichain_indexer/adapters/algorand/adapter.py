@@ -168,6 +168,7 @@ def _describe_transaction(record: TransactionRecord) -> dict[str, str]:
         if is_asa
         else PROFILE.format_native(record.amount),
         "Fee": PROFILE.format_native(record.fee),
+        "Post-quantum": native.pq.scheme if native.pq else "no",
     }
 
 
@@ -183,6 +184,7 @@ def _describe_account(record: AccountRecord) -> dict[str, str]:
         "Apps opted in": str(native.apps_opted_in),
         "ASAs created": str(native.created_asas),
         "Apps created": str(native.created_apps),
+        "Post-quantum": "yes, pqsig" if native.pq else "no",
         "As of round": str(native.round),
     }
 

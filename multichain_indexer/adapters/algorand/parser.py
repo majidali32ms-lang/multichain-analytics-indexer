@@ -25,6 +25,7 @@ from multichain_indexer.adapters.algorand.models import (
     AsaHolding,
     LogKind,
 )
+from multichain_indexer.adapters.algorand.pq import account_pq, transaction_pq
 from multichain_indexer.core.errors import MalformedResponse, WrongNetwork
 from multichain_indexer.core.http import JsonObject
 from multichain_indexer.core.models import (
@@ -93,6 +94,14 @@ class _RawKeyreg(_Raw):
     selection_participation_key: str | None = None
 
 
+class _RawPqSignature(_Raw):
+    scheme: str
+
+
+class _RawSignature(_Raw):
+    pqsig: _RawPqSignature | None = None
+
+
 class _RawTransaction(_Raw):
     id: str | None = None
     sender: str
@@ -114,6 +123,7 @@ class _RawTransaction(_Raw):
     asset_freeze_transaction: _RawAssetFreeze | None = None
     application_transaction: _RawApplicationCall | None = None
     keyreg_transaction: _RawKeyreg | None = None
+    signature: _RawSignature | None = None
 
 
 class _RawHolding(_Raw):
@@ -136,6 +146,7 @@ class _RawAccount(_Raw):
     total_apps_opted_in: int = 0
     total_created_assets: int = 0
     total_created_apps: int = 0
+    sig_type: str | None = None
 
 
 class _RawAssetParams(_Raw):
@@ -199,7 +210,10 @@ def parse_transaction(body: JsonObject, network: str) -> TransactionRecord:
         status=Status.FINAL,
         chain=CHAIN,
         network=network,
-        native=AlgorandTransaction(**_native_fields(raw, raw.confirmed_round, raw.id)),
+        native=AlgorandTransaction(
+            **_native_fields(raw, raw.confirmed_round, raw.id),
+            pq=transaction_pq(raw.tx_type, _pq_scheme(raw)),
+        ),
     )
 
 
@@ -226,6 +240,7 @@ def parse_account(body: JsonObject, network: str) -> AccountRecord:
             created_asas=raw.total_created_assets,
             created_apps=raw.total_created_apps,
             deleted=raw.deleted,
+            pq=account_pq(raw.sig_type),
         ),
     )
 
@@ -306,6 +321,11 @@ def _require_network(raw: _RawTransaction, network: str) -> None:
     expected = GENESIS_HASH_BY_NETWORK.get(network)
     if expected and raw.genesis_hash and raw.genesis_hash != expected:
         raise WrongNetwork(f"the configured Indexer endpoint does not serve Algorand {network}")
+
+
+def _pq_scheme(raw: _RawTransaction) -> str | None:
+    pqsig = raw.signature.pqsig if raw.signature else None
+    return pqsig.scheme if pqsig else None
 
 
 def _receiver_and_amount(raw: _RawTransaction) -> tuple[str | None, int]:
