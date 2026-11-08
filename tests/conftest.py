@@ -19,6 +19,7 @@ from multichain_indexer.core.config import Settings
 
 FIXTURES = Path(__file__).parent / "fixtures" / "algorand"
 SOLANA_FIXTURES = Path(__file__).parent / "fixtures" / "solana"
+NEAR_FIXTURES = Path(__file__).parent / "fixtures" / "near"
 
 
 def load_fixture(name: str) -> dict[str, object]:
@@ -27,6 +28,10 @@ def load_fixture(name: str) -> dict[str, object]:
 
 def load_solana_fixture(name: str) -> dict[str, Any]:
     return json.loads((SOLANA_FIXTURES / f"{name}.json").read_text(encoding="utf-8"))
+
+
+def load_near_fixture(name: str) -> dict[str, Any]:
+    return json.loads((NEAR_FIXTURES / f"{name}.json").read_text(encoding="utf-8"))
 
 
 @dataclass
@@ -45,6 +50,7 @@ class FakeNode:
         self.routes: dict[str, Reply | list[Reply]] = {}
         self.requests: list[tuple[str, dict[str, str]]] = []
         self.rpc_calls: list[tuple[str, list[object]]] = []
+        self.post_bodies: list[tuple[str, dict[str, Any]]] = []
         self.received_headers: list[dict[str, str]] = []
         self._loop = asyncio.new_event_loop()
         self._started = threading.Event()
@@ -102,8 +108,14 @@ class FakeNode:
         if request.method != "POST":
             return request.path
         body = json.loads(await request.text())
+        if "method" not in body:
+            self.post_bodies.append((request.path, body))
+            return request.path
         self.rpc_calls.append((body["method"], body["params"]))
         return f"rpc:{body['method']}"
+
+    def posted_to(self, path: str) -> list[dict[str, Any]]:
+        return [body for requested, body in self.post_bodies if requested == path]
 
     def _next_reply(self, key: str) -> Reply:
         route = self.routes.get(key)

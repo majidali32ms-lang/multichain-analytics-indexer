@@ -79,7 +79,7 @@ def _with_indexer(
 @click.option(
     "--network",
     type=click.Choice(["mainnet", "testnet", "devnet", "localnet"]),
-    help="Network to read. Defaults to Algorand testnet or Solana devnet.",
+    help="Network to read. Defaults to Algorand testnet, Solana devnet or NEAR testnet.",
 )
 @click.option("--db", "database", type=click.Path(dir_okay=False, path_type=Path))
 @click.option("--env-file", default=".env", show_default=True)
@@ -106,7 +106,7 @@ def cli(
 
 @cli.group()
 def index() -> None:
-    """Look up one account, Algorand ASA or app, or Solana SPL token or program."""
+    """Look up one account, Algorand ASA or app, Solana SPL token or program, or NEAR contract."""
 
 
 @index.command("account")
@@ -121,7 +121,7 @@ def index() -> None:
 @click.pass_obj
 @_with_indexer
 def index_account(indexer: Indexer, address: str, limit: int) -> None:
-    """Show an account's state, balance in ALGO or SOL, and its recent transactions."""
+    """Show an account's state, balance in ALGO, SOL or NEAR, and its recent transactions."""
     _echo_fields(indexer.describe(indexer.account(address)))
     click.echo()
     for record in indexer.account_transactions(address, limit=limit):
@@ -166,6 +166,16 @@ def index_program(indexer: Indexer, program_id: str) -> None:
     """Show a Solana program by its program ID."""
     _require_chain(indexer, "solana", "index program")
     _echo_fields(indexer.describe(indexer.contract(program_id)))
+
+
+@index.command("contract")
+@click.argument("account_id")
+@click.pass_obj
+@_with_indexer
+def index_contract(indexer: Indexer, account_id: str) -> None:
+    """Show the contract deployed on a NEAR account ID."""
+    _require_chain(indexer, "near", "index contract")
+    _echo_fields(indexer.describe(indexer.contract(account_id)))
 
 
 @cli.command()

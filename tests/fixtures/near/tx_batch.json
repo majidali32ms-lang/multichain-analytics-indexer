@@ -1,0 +1,151 @@
+{
+ "is_success": true,
+ "transaction": {
+  "execution_outcome": {
+   "block_hash": "DUVpwTiNACxXkLSi9xbZyCByRfizZFs6fyecGUdzn873",
+   "block_height": 269314018,
+   "block_timestamp": 1789835369902088430,
+   "id": "CKQ6R8UV5HgaWC6Z819anbya7uM9PD7QuhAXnVcii9zp",
+   "index": 0,
+   "outcome": {
+    "executor_id": "gotest1789830402.testnet",
+    "gas_burnt": 424422339090,
+    "logs": [],
+    "receipt_ids": [
+     "9JVwgZM9vuQ2jzBrxcRsveX4qbmHPcp57N1g7TNhdd7s"
+    ],
+    "status": {
+     "SuccessReceiptId": "9JVwgZM9vuQ2jzBrxcRsveX4qbmHPcp57N1g7TNhdd7s"
+    },
+    "tokens_burnt": "42442233909000000000"
+   }
+  },
+  "receipts": [
+   {
+    "execution_outcome": {
+     "block_hash": "DoMchtv6JRVNbjf1KvcNZgoxUy4dh82vDbQfh6KfRH1L",
+     "block_height": 269314019,
+     "block_timestamp": 1789835370569300455,
+     "id": "9JVwgZM9vuQ2jzBrxcRsveX4qbmHPcp57N1g7TNhdd7s",
+     "index": 0,
+     "outcome": {
+      "executor_id": "guest-book.testnet",
+      "gas_burnt": 1469776982410,
+      "logs": [],
+      "receipt_ids": [
+       "5Cx49hByYsQdetFdYDdVTDFoUdJLEd3G92psmTe1ugLJ"
+      ],
+      "status": {
+       "SuccessValue": ""
+      },
+      "tokens_burnt": "146977698241000000000"
+     }
+    },
+    "receipt": {
+     "block_hash": "DoMchtv6JRVNbjf1KvcNZgoxUy4dh82vDbQfh6KfRH1L",
+     "block_height": 269314019,
+     "block_timestamp": 1789835370569300455,
+     "predecessor_id": "gotest1789830402.testnet",
+     "priority": 0,
+     "receipt": {
+      "Action": {
+       "actions": [
+        {
+         "Transfer": {
+          "deposit": "500000000000000000000000"
+         }
+        },
+        {
+         "FunctionCall": {
+          "args": "eyJ0ZXh0IjogInJlZGFjdGVkIn0=",
+          "deposit": "0",
+          "gas": 30000000000000,
+          "method_name": "addMessage"
+         }
+        }
+       ],
+       "gas_price": "1000000000",
+       "input_data_ids": [],
+       "is_promise_yield": false,
+       "output_data_receivers": [],
+       "signer_id": "gotest1789830402.testnet",
+       "signer_public_key": "ed25519:Gikeeq9JW8QeUU2hnAogQHQzXBZnjEoybXAEyJ13hY2c"
+      }
+     },
+     "receipt_id": "9JVwgZM9vuQ2jzBrxcRsveX4qbmHPcp57N1g7TNhdd7s",
+     "receipt_index": 0,
+     "receiver_id": "guest-book.testnet"
+    }
+   },
+   {
+    "execution_outcome": {
+     "block_hash": "FGTrdc1G9GzRsrETB6GDji4VLT18m2ZBNQoubBZFLLwg",
+     "block_height": 269314020,
+     "block_timestamp": 1789835371101226490,
+     "id": "5Cx49hByYsQdetFdYDdVTDFoUdJLEd3G92psmTe1ugLJ",
+     "index": 0,
+     "outcome": {
+      "executor_id": "gotest1789830402.testnet",
+      "gas_burnt": 223182562500,
+      "logs": [],
+      "receipt_ids": [],
+      "status": {
+       "SuccessValue": ""
+      },
+      "tokens_burnt": "0"
+     }
+    },
+    "receipt": {
+     "block_hash": "FGTrdc1G9GzRsrETB6GDji4VLT18m2ZBNQoubBZFLLwg",
+     "block_height": 269314020,
+     "block_timestamp": 1789835371101226490,
+     "predecessor_id": "system",
+     "priority": 0,
+     "receipt": {
+      "Action": {
+       "actions": [
+        {
+         "Transfer": {
+          "deposit": "30856262998543000000000"
+         }
+        }
+       ],
+       "gas_price": "0",
+       "input_data_ids": [],
+       "is_promise_yield": false,
+       "output_data_receivers": [],
+       "signer_id": "gotest1789830402.testnet",
+       "signer_public_key": "ed25519:Gikeeq9JW8QeUU2hnAogQHQzXBZnjEoybXAEyJ13hY2c"
+      }
+     },
+     "receipt_id": "5Cx49hByYsQdetFdYDdVTDFoUdJLEd3G92psmTe1ugLJ",
+     "receipt_index": 0,
+     "receiver_id": "gotest1789830402.testnet"
+    }
+   }
+  ],
+  "transaction": {
+   "actions": [
+    {
+     "Transfer": {
+      "deposit": "500000000000000000000000"
+     }
+    },
+    {
+     "FunctionCall": {
+      "args": "eyJ0ZXh0IjogInJlZGFjdGVkIn0=",
+      "deposit": "0",
+      "gas": 30000000000000,
+      "method_name": "addMessage"
+     }
+    }
+   ],
+   "hash": "CKQ6R8UV5HgaWC6Z819anbya7uM9PD7QuhAXnVcii9zp",
+   "nonce": 269305507000003,
+   "priority_fee": 0,
+   "public_key": "ed25519:Gikeeq9JW8QeUU2hnAogQHQzXBZnjEoybXAEyJ13hY2c",
+   "receiver_id": "guest-book.testnet",
+   "signer_id": "gotest1789830402.testnet"
+  }
+ }
+}

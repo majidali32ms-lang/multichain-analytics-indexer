@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "multichain-analytics-indexer"
-version = "0.2.1"
+version = "0.3.0"
 description = "Index and analyse blockchain accounts and transactions, in each chain's own terms."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 authors = [{ name = "Majid Khan" }]
 license-files = ["LICENSE"]
-keywords = ["algorand", "solana", "blockchain", "indexer", "analytics"]
+keywords = ["algorand", "solana", "near", "blockchain", "indexer", "analytics"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",

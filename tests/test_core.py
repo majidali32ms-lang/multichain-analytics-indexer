@@ -323,6 +323,6 @@ def test_format_native_trims_trailing_zeros() -> None:
 
 def test_registry_reports_planned_and_unknown_chains() -> None:
     with pytest.raises(UnsupportedChain, match="later version"):
-        create_indexer("near", None, Settings())
+        create_indexer("ethereum", None, Settings())
     with pytest.raises(UnsupportedChain, match="unknown chain"):
         create_indexer("dogechain", None, Settings())

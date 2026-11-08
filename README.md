@@ -9,8 +9,8 @@ A Python library and command line for indexing and analysing blockchain accounts
 transactions, in each chain's own terms. It keeps what it reads in a local database,
 syncs incrementally, and produces metrics and exports for analysis.
 
-This version supports **Algorand** and **Solana**. See the [roadmap](#roadmap) for what
-comes next.
+This version supports **Algorand**, **Solana** and **NEAR**. See the [roadmap](#roadmap) for
+what comes next.
 
 ## Install
 
@@ -240,6 +240,96 @@ Token-2022 transfers. Accounts include their SPL token accounts.
 - `status` is `pending` until finalized, then `final` or `failed`. Pending records are
   fetched again on the next sync.
 
+## NEAR
+
+NEAR's RPC cannot list an account's transactions, so two sources are used:
+
+| Data | Source | Default |
+|---|---|---|
+| Account state, access keys, chain head | NEAR's standard JSON-RPC (`view_account`, `view_access_key_list`) | dRPC's public endpoints |
+| Account history, with receipts and outcomes | An indexing service, chosen by configuration | The FastNEAR Transactions API |
+
+No API key is needed to start. Read
+[what this history can and cannot promise](https://majidali32ms-lang.github.io/multichain-analytics-indexer/chains/near/#limits)
+before relying on it.
+
+| Option | Meaning |
+|---|---|
+| `--network testnet` | The default. |
+| `--network mainnet` | Must be asked for explicitly. |
+| `--network localnet` | A NEAR sandbox at `http://localhost:3030`. Account and contract lookups only, unless you set a history server. |
+
+Set `NEAR_<NETWORK>_RPC_SERVER`, `NEAR_<NETWORK>_HISTORY_SERVER`, and
+`NEAR_<NETWORK>_HISTORY_API_KEY` in `.env`. `NEAR_<NETWORK>_HISTORY_SOURCE` chooses the
+service; adding another needs one new class, with no change to the parser or to `core/`.
+
+A history service links many more transactions to an account than an explorer shows. By
+default a sync keeps the ones the account signed or received, which is the set NearBlocks
+lists for it. `NEAR_<NETWORK>_HISTORY_SCOPE=all` also keeps those where the account only
+received a receipt or is named in an action's arguments or an event log. Metrics count
+what the syncs stored, so they follow this setting; sync into a new database after
+changing it.
+
+An RPC endpoint on the wrong network stops with `WrongNetwork`. The history server's
+network cannot be checked, so set `NEAR_<NETWORK>_HISTORY_SERVER` with care.
+
+### Commands
+
+```bash
+multichain-indexer --chain near index account <account-id>
+```
+
+```bash
+multichain-indexer --chain near index contract <account-id>
+```
+
+```bash
+multichain-indexer --chain near sync <account-id>
+```
+
+```bash
+multichain-indexer --chain near metrics --days 30
+```
+
+```bash
+multichain-indexer --chain near export --format csv --output transactions.csv
+```
+
+```text
+Account ID    f781edbfe07287152e3912cb698af4155234df3c2d9c23bf625f675b8f6de5fa
+Kind          near-implicit
+Exists        yes
+Balance       0.732016766023559899999994 NEAR
+Staked        0 NEAR
+Storage used  182 bytes
+Contract      no
+Access keys   1 (0 function-call)
+Shard         9
+As of block   276744703
+
+2026-09-04 07:40  GEZx7KDqDdLbyViv4BvHhKmUSCBmTekLvmM2Q22bkidH  Batch  failed  0.000000000000000000000002 NEAR  0.0004703005168722 NEAR  19.753 Tgas  3
+2026-09-04 07:36  HUnm1ZN6wKv3hXgsy3xnTkVwCFiAeoCJ9GH2KjHyaubS  FunctionCall  final  0.000000000000000000000001 NEAR  0.0002665409479373 NEAR  10.190 Tgas  2
+```
+
+```text
+Synced f781edbfe07287152e3912cb698af4155234df3c2d9c23bf625f675b8f6de5fa on near testnet: 20 transactions up to height 276744722, 7 requests in 9.4s
+Synced f781edbfe07287152e3912cb698af4155234df3c2d9c23bf625f675b8f6de5fa on near testnet: 0 transactions up to height 276744748, 4 requests in 3.5s
+```
+
+### What is recorded
+
+The `native` block holds the block height, every action with its method, decoded arguments,
+gas and attached deposit, and every receipt with its outcome, logs, gas burnt and tokens
+burnt. Accounts include their kind, access keys with their permissions, and their shard.
+
+- `amount` is the yoctoNEAR attached by the transaction's actions, shown in NEAR.
+- `fee` is the tokens burnt by the transaction and all its receipts, in yoctoNEAR.
+- `sender` is the signer. Gas is held in gas units and shown in Tgas.
+- A failed receipt does not always fail its transaction, so both are recorded. `status`
+  follows the transaction's first receipt, as the protocol does.
+- `status` is `pending` until the receipts that decide it have run. Transactions in the last
+  300 blocks are fetched again on the next sync.
+
 ## How it is built
 
 ```text
@@ -260,6 +350,7 @@ multichain_indexer/
     observability.py  structured logs with secrets masked
   adapters/algorand/  client, parser, metrics
   adapters/solana/    client, parser, metrics
+  adapters/near/      client, parser, metrics, and pluggable history sources
 ```
 
 A sync can be stopped at any point and picks up where it left off. It walks a fixed

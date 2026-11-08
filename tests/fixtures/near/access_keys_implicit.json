@@ -1,0 +1,17 @@
+{
+ "id": "1",
+ "jsonrpc": "2.0",
+ "result": {
+  "block_hash": "t7qSwTUCKH8dDgVScG8kBZzdoCKJtv8ptScEtUDGb9q",
+  "block_height": 276673333,
+  "keys": [
+   {
+    "access_key": {
+     "nonce": 266528230000018,
+     "permission": "FullAccess"
+    },
+    "public_key": "ed25519:HfAcSFqrtohfegS7pdr1YL6e5jEHCwjPAtP956vthCjT"
+   }
+  ]
+ }
+}

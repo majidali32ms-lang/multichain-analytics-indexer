@@ -1,6 +1,26 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
+
+Adds NEAR.
+
+- Look up accounts with their kind, access keys and shard, and contracts with their code
+  hash. These come from NEAR's standard JSON-RPC.
+- Sync an account's history, with every receipt and its outcome. NEAR's RPC cannot list an
+  account's transactions, so this comes from an indexing service, chosen by
+  `NEAR_<NETWORK>_HISTORY_SOURCE`. The FastNEAR Transactions API is the default and works
+  without a key; `NEAR_<NETWORK>_HISTORY_API_KEY` sets one.
+- A sync keeps the transactions an account signed or received, the set NearBlocks lists for
+  it. `NEAR_<NETWORK>_HISTORY_SCOPE=all` also keeps those where the account only received a
+  receipt or is named in an action's arguments or an event log.
+- A sync never moves its checkpoint past what the history service has indexed, so a service
+  that falls behind cannot leave a gap.
+- Metrics: fees in yoctoNEAR and NEAR, gas burnt, top contracts by calls, function calls by
+  method, and receipt success and failure rates.
+- Testnet by default; mainnet and a local sandbox with `--network`. An RPC endpoint serving a
+  different network than `--network` raises `WrongNetwork`.
+
+Other changes:
 
 - Solana: checks the endpoint's `getGenesisHash` before the first request and raises
   `WrongNetwork` if it serves a different cluster than `--network`. Each run makes one more
