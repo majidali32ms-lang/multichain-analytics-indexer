@@ -268,6 +268,7 @@ def _describe_transaction(record: TransactionRecord) -> dict[str, str]:
         "Fee": PROFILE.format_native(record.fee),
         "Gas burnt": _tgas(native.gas_burnt),
         "Receipts": str(len(native.receipts)),
+        "Post-quantum": native.pq.scheme if native.pq else "no",
     }
 
 
@@ -284,6 +285,7 @@ def _describe_account(record: AccountRecord) -> dict[str, str]:
         "Contract": "yes" if native.has_contract else "no",
         "Access keys": f"{len(native.access_keys)} ({function_call_keys} function-call)",
         "Shard": "not reported" if native.shard_id is None else str(native.shard_id),
+        "Post-quantum": native.pq.evidence if native.pq else "no",
         "As of block": str(native.block_height or "not recorded"),
     }
 

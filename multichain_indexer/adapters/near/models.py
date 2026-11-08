@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic import Field, JsonValue
 
 from multichain_indexer.core.models import NativeData
+from multichain_indexer.pq import PqSignature
 
 
 class NearAccessKey(NativeData):
@@ -20,6 +21,7 @@ class NearAccessKey(NativeData):
     allowance: int | None = Field(default=None, ge=0)
     receiver_id: str | None = None
     method_names: tuple[str, ...] = ()
+    pq: PqSignature | None = None
 
 
 class NearAction(NativeData):
@@ -88,6 +90,7 @@ class NearTransaction(NativeData):
     conversion_tokens_burnt: int = Field(ge=0)
     actions: tuple[NearAction, ...] = ()
     receipts: tuple[NearReceipt, ...] = ()
+    pq: PqSignature | None = None
 
 
 class NearAccount(NativeData):
@@ -109,6 +112,7 @@ class NearAccount(NativeData):
     global_contract_account_id: str | None = None
     shard_id: int | None = None
     access_keys: tuple[NearAccessKey, ...] = ()
+    pq: PqSignature | None = None
 
 
 class NearContract(NativeData):

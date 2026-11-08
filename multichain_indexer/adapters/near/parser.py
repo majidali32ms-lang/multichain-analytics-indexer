@@ -31,6 +31,7 @@ from multichain_indexer.adapters.near.models import (
     NearReceipt,
     NearTransaction,
 )
+from multichain_indexer.adapters.near.pq import account_pq, key_pq, transaction_pq
 from multichain_indexer.core.errors import InvalidAddress, MalformedResponse, NotFound
 from multichain_indexer.core.models import AccountRecord, ContractRecord, Status, TransactionRecord
 
@@ -198,6 +199,7 @@ def parse_transaction(executed: ExecutedTransaction, network: str) -> Transactio
             "conversion_tokens_burnt": executed.outcome.tokens_burnt,
             "actions": actions,
             "receipts": tuple(_receipt(receipt) for receipt in executed.receipts),
+            "pq": transaction_pq(executed.public_key),
         },
         f"transaction {executed.hash}",
     )
@@ -231,6 +233,7 @@ def parse_account(
             address=account, balance=0, chain=CHAIN, network=network, native=native
         )
     raw = _validate(_RawAccount, state, "view_account")
+    access_keys = _access_keys(keys)
     native = NearAccount(
         kind=kind,
         exists=True,
@@ -242,7 +245,8 @@ def parse_account(
         global_contract_hash=raw.global_contract_hash,
         global_contract_account_id=raw.global_contract_account_id,
         shard_id=shard_id,
-        access_keys=_access_keys(keys),
+        access_keys=access_keys,
+        pq=account_pq([key.pq for key in access_keys]),
     )
     return AccountRecord(
         address=account, balance=raw.amount, chain=CHAIN, network=network, native=native
@@ -298,11 +302,12 @@ def _access_keys(keys: JsonValue | None) -> tuple[NearAccessKey, ...]:
 
 def _access_key(public_key: str, body: _RawAccessKeyBody) -> NearAccessKey:
     permission = body.permission
+    pq = key_pq(public_key)
     if isinstance(permission, str):
-        return NearAccessKey(public_key=public_key, permission=permission, nonce=body.nonce)
+        return NearAccessKey(public_key=public_key, permission=permission, nonce=body.nonce, pq=pq)
     kind, fields = _single_entry(permission, "access key permission")
     if kind != FUNCTION_CALL:
-        return NearAccessKey(public_key=public_key, permission=kind, nonce=body.nonce)
+        return NearAccessKey(public_key=public_key, permission=kind, nonce=body.nonce, pq=pq)
     call = _validate(_RawFunctionCallPermission, fields, "access key permission")
     return NearAccessKey(
         public_key=public_key,
@@ -311,6 +316,7 @@ def _access_key(public_key: str, body: _RawAccessKeyBody) -> NearAccessKey:
         allowance=call.allowance,
         receiver_id=call.receiver_id,
         method_names=tuple(call.method_names),
+        pq=pq,
     )
 
 

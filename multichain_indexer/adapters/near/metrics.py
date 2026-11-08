@@ -11,6 +11,7 @@ from pydantic import JsonValue
 from multichain_indexer.adapters.near.models import NearReceipt, NearTransaction
 from multichain_indexer.adapters.near.parser import FUNCTION_CALL, STATUS_FAILURE, STATUS_SUCCESS
 from multichain_indexer.core.models import TransactionRecord
+from multichain_indexer.pq import pq_share
 
 TOP_COUNT = 10
 YOCTO_DECIMALS = 24
@@ -47,6 +48,7 @@ def near_metrics(records: Sequence[TransactionRecord]) -> dict[str, JsonValue]:
             ("method", "calls"), Counter(method for _, method in calls)
         ),
         "receipts": _receipt_outcomes(receipts),
+        "post_quantum": pq_share(records),
     }
 
 
