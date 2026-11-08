@@ -266,8 +266,12 @@ service; adding another needs one new class, with no change to the parser or to 
 A history service links many more transactions to an account than an explorer shows. By
 default a sync keeps the ones the account signed or received, which is the set NearBlocks
 lists for it. `NEAR_<NETWORK>_HISTORY_SCOPE=all` also keeps those where the account only
-received a receipt or is named in an action's arguments or an event log. Sync into a new
-database after changing it.
+received a receipt or is named in an action's arguments or an event log. Metrics count
+what the syncs stored, so they follow this setting; sync into a new database after
+changing it.
+
+An RPC endpoint on the wrong network stops with `WrongNetwork`. The history server's
+network cannot be checked, so set `NEAR_<NETWORK>_HISTORY_SERVER` with care.
 
 ### Commands
 

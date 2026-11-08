@@ -20,7 +20,24 @@ NEAR_TESTNET_HISTORY_API_KEY=your-key
 NEAR_TESTNET_HISTORY_SCOPE=direct
 ```
 
-An RPC endpoint whose chain ID belongs to another network raises `WrongNetwork`.
+Before its first request, the adapter asks the RPC endpoint for its `chain_id` with the
+`status` method, and stops if it belongs to a different network than `--network`:
+
+```text
+Error: the RPC endpoint serves NEAR mainnet, not NEAR testnet. Check NEAR_TESTNET_RPC_SERVER.
+```
+
+`mainnet` and `testnet` must match exactly; any other chain ID counts as `localnet`, because
+a local sandbox names its own.
+
+**The history server's network is not checked.** Neither FastNEAR's Transactions API nor the
+`HistorySource` protocol reports which network a service indexes, so nothing catches a
+`NEAR_TESTNET_HISTORY_SERVER` that points at a mainnet service. Such a sync stores mainnet
+transactions labelled `testnet`, or nothing at all. Check that setting by hand.
+
+**`localnet` was not tested against a real NEAR sandbox**, only against a local fake server.
+Account and contract lookups need only the RPC; a sync also needs
+`NEAR_LOCALNET_HISTORY_SERVER`, because no public service indexes a sandbox.
 
 ## Which transactions count
 
@@ -35,6 +52,33 @@ account page. `NEAR_<NETWORK>_HISTORY_SCOPE` chooses which ones a sync keeps:
 Metrics, `index account` and exports all follow the scope, because it decides what is
 stored. It applies to syncs made after it is set, so sync into a new database (`--db`) after
 changing it: records already stored stay as they are.
+
+## Metrics
+
+`metrics` adds these to the shared figures, in its `native` block:
+
+| Field | Meaning |
+|---|---|
+| `fees_yoctonear`, `fees_near` | Tokens burnt by the transactions and all their receipts |
+| `gas_burnt` | Gas burnt, in gas units and in Tgas |
+| `top_contracts_by_calls` | The ten most called contracts, cross-contract calls included |
+| `function_calls_by_method` | The ten most called methods |
+| `receipts` | Receipts that succeeded and failed, without the refunds the protocol sends |
+
+Metrics read the transactions that syncs have stored. They have no scope switch of their
+own: they count whatever `NEAR_<NETWORK>_HISTORY_SCOPE` the syncs used, so by default the
+transactions an account signed or received, as NearBlocks counts them. To compare that with
+the full set, sync the same account into a second database with `all`:
+
+```bash
+multichain-indexer --chain near --db direct.db sync <account-id>
+```
+
+```bash
+NEAR_TESTNET_HISTORY_SCOPE=all multichain-indexer --chain near --db all.db sync <account-id>
+```
+
+Then run `metrics --account <account-id>` against each `--db`.
 
 ## Adding a history source
 
@@ -62,11 +106,12 @@ change.
   outside it are fetched before they are left out.
 - **Shards are on accounts only.** FastNEAR's transaction data has no shard. An account's
   shard is worked out from the current layout, so it says nothing about past transactions.
-- **The network check covers the RPC only.** Nothing confirms which network a configured
-  history server serves.
+- **The network check covers the RPC only.** A history server's network cannot be
+  checked; see [Networks](#networks).
 - **A record can stay pending.** Transactions in the last 300 blocks are fetched again on the
   next sync. One whose receipts take longer than that stays `pending`.
-- **Not tested on a real sandbox.** `localnet` was only tested against a local fake server.
+- **Not tested on a real sandbox.** `localnet` was only tested against a local fake
+  server.
 - **No token lookups.** A NEP-141 token is a contract, so `index contract` shows it, but its
   metadata is not read.
 
