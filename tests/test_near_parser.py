@@ -12,6 +12,7 @@ import pytest
 from multichain_indexer import InvalidAddress, MalformedResponse, NotFound
 from multichain_indexer.adapters.near.fastnear import _executed_transaction, _RawTransaction
 from multichain_indexer.adapters.near.history import ExecutedTransaction
+from multichain_indexer.adapters.near.metrics import near_metrics
 from multichain_indexer.adapters.near.models import NearTransaction
 from multichain_indexer.adapters.near.parser import (
     MAX_ARGS_NESTING,
@@ -561,6 +562,43 @@ def test_account_using_a_global_contract_is_a_contract() -> None:
     record = parse_contract(state, "ab.testnet", NETWORK)
     assert record.native.global_contract_account_id == "code.near"
     assert parse_account(state, {"keys": []}, None, "ab.testnet", NETWORK).native.has_contract
+
+
+def test_metrics_cover_fees_gas_calls_and_receipts() -> None:
+    records = [record_of(name) for name in TX_FIXTURES]
+    metrics = near_metrics(records)
+    natives = [native_of(record) for record in records]
+
+    assert metrics["fees_yoctonear"] == sum(record.fee for record in records)
+    assert metrics["fees_near"].startswith("0.")
+    assert metrics["gas_burnt"]["gas"] == sum(native.gas_burnt for native in natives)
+    assert metrics["gas_burnt"]["tgas"] == metrics["gas_burnt"]["gas"] / 10**12
+
+    calls = metrics["function_calls_by_method"]
+    assert calls == sorted(calls, key=lambda row: (-row["calls"], row["method"]))
+    assert metrics["top_contracts_by_calls"][0]["calls"] >= 1
+
+    receipts = metrics["receipts"]
+    real = [r for native in natives for r in native.receipts if not r.is_refund]
+    assert receipts["total"] == len(real)
+    assert receipts["failed"] == sum(1 for r in real if r.status == "failure")
+    assert receipts["succeeded"] + receipts["failed"] == receipts["total"]
+    assert receipts["failure_rate"] + receipts["success_rate"] == pytest.approx(1)
+    assert receipts["failed"] >= 2
+
+
+def test_metrics_with_no_records() -> None:
+    metrics = near_metrics([])
+    assert metrics["fees_near"] == "0"
+    assert metrics["receipts"]["failure_rate"] is None
+    assert metrics["top_contracts_by_calls"] == []
+
+
+def test_whole_near_of_an_exact_amount_has_no_trailing_zeros() -> None:
+    record = record_of("tx_transfer").model_copy(update={"fee": 10**24})
+    assert near_metrics([record])["fees_near"] == "1"
+    half = record.model_copy(update={"fee": 5 * 10**23})
+    assert near_metrics([half])["fees_near"] == "0.5"
 
 
 def test_fixtures_were_scrubbed() -> None:
