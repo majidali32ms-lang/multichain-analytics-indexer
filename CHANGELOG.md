@@ -1,6 +1,17 @@
 # Changelog
 
+## 0.3.1
+
+The first 0.3 release on PyPI.
+
+- Fixes the command line when the reader of its output is gone before the first write, as in
+  `multichain-indexer export --format json | true` with an export larger than the output
+  buffer. It printed an error from Python. It now exits quietly with code 1, as it already
+  did when the reader left later, on Windows and Linux. 0.2.1 had the same fault.
+
 ## 0.3.0
+
+Published to TestPyPI only.
 
 Adds NEAR.
 
