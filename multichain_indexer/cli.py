@@ -20,6 +20,7 @@ from multichain_indexer.core.export import EXPORT_FORMATS
 from multichain_indexer.core.models import SyncResult, TransactionRecord
 from multichain_indexer.core.observability import configure_logging
 from multichain_indexer.core.registry import PLANNED_CHAINS
+from multichain_indexer.pq import PQ_STATUS
 
 if sys.platform == "win32":
     import ctypes
@@ -239,6 +240,18 @@ def export(
     text = indexer.export(export_format, output, account=account, days=days)
     if text is not None:
         click.echo(text.rstrip("\n"))
+
+
+@cli.command("pq-status")
+def pq_status() -> None:
+    """Show where each planned chain stands on post-quantum signatures, with sources."""
+    width = max(len(f"{row.chain} {row.network}") for row in PQ_STATUS)
+    for row in PQ_STATUS:
+        found = f"{row.scheme}, {row.since}" if row.scheme else ""
+        name = f"{row.chain} {row.network}".ljust(width)
+        click.echo(f"{name}  {row.state.value}{'  ' + found if found else ''}")
+        click.echo(f"{' ' * width}  {row.note}")
+        click.echo(f"{' ' * width}  {row.source} (checked {row.checked_on})")
 
 
 def main() -> None:

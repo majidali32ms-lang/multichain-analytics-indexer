@@ -102,7 +102,7 @@ PQ_STATUS: tuple[ChainPqStatus, ...] = (
         scheme=None,
         since="",
         detected=False,
-        note="EIP-8141 (frame transactions) is a draft; the Hegotá upgrade is in planning.",
+        note="EIP-8141 (frame transactions) is a draft; the Hegota upgrade is in planning.",
         source="https://ethereum.org/roadmap/security/quantum-resistance/",
         checked_on=CHECKED_ON,
     ),

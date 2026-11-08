@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from click.testing import CliRunner
+
+from multichain_indexer.cli import cli
 from multichain_indexer.core.models import NativeData, Status, TransactionRecord
 from multichain_indexer.core.registry import PLANNED_CHAINS
 from multichain_indexer.pq import PQ_STATUS, PqSignature, PqState, first_match, pq_share
@@ -90,3 +93,22 @@ def test_only_chains_with_a_detector_claim_anything() -> None:
 def test_no_chain_without_an_adapter_is_called_live() -> None:
     adapters = {"algorand", "solana", "near"}
     assert {row.chain for row in PQ_STATUS if row.state is not PqState.NONE_LIVE} <= adapters
+
+
+def test_cli_shows_every_chain_with_its_source_and_date() -> None:
+    result = CliRunner().invoke(cli, ["--env-file", "none.env", "pq-status"])
+    assert result.exit_code == 0, result.output
+    for row in PQ_STATUS:
+        assert f"{row.chain} {row.network}" in result.output
+        assert row.source in result.output
+    assert result.output.count("none live yet") == sum(
+        1 for row in PQ_STATUS if row.state is PqState.NONE_LIVE
+    )
+    assert "algorand mainnet  live  falcon-1024, in use by 2026-08-22" in result.output
+    assert "checked 2026-11-08" in result.output
+
+
+def test_status_is_plain_ascii_so_every_console_shows_it() -> None:
+    for row in PQ_STATUS:
+        for text in (row.note, row.since, row.source, row.scheme or ""):
+            assert text.isascii(), text
