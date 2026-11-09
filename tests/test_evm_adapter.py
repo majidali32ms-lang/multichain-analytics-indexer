@@ -23,7 +23,7 @@ from multichain_indexer import (
 )
 from multichain_indexer.adapters.evm import EvmIndexer
 from multichain_indexer.adapters.evm.adapter import indexer_factory
-from multichain_indexer.adapters.evm.client import parse_data, parse_quantity
+from multichain_indexer.adapters.evm.encoding import parse_data, parse_quantity
 from multichain_indexer.adapters.evm.models import EvmAccount, EvmContract
 from multichain_indexer.adapters.evm.parser import validated_address
 from multichain_indexer.adapters.evm.profiles import (
