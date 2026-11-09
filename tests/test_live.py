@@ -47,3 +47,12 @@ def test_example_script_runs(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_example_notebook_runs() -> None:
     notebook = nbformat.read(EXAMPLES / "account_analysis.ipynb", as_version=4)
     NotebookClient(notebook, timeout=120, kernel_name="python3").execute()
+
+
+def test_native_falcon_account_on_mainnet_is_post_quantum(tmp_path: Path) -> None:
+    falcon_account = "PPF57PQNUKYUGNH7SENJFOJFFD7T2QFFCWDKAZ2TCPCURLS6QU7NRFNN7Y"
+    with Indexer("algorand", "mainnet", database=tmp_path / "live.db") as indexer:
+        account = indexer.account(falcon_account)
+        recent = indexer.account_transactions(falcon_account, limit=5)
+    assert account.native.pq is not None
+    assert any(record.native.pq and record.native.pq.scheme == "falcon-1024" for record in recent)

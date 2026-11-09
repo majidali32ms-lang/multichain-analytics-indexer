@@ -74,3 +74,10 @@ def test_example_script_runs(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_example_notebook_runs() -> None:
     notebook = nbformat.read(EXAMPLES / "account_analysis.ipynb", as_version=4)
     NotebookClient(notebook, timeout=240, kernel_name="python3").execute()
+
+
+def test_account_with_an_ml_dsa_key_on_testnet_is_post_quantum(tmp_path: Path) -> None:
+    with Indexer("near", database=tmp_path / "live.db") as indexer:
+        account = indexer.account("zf-b6bc410f46.testnet")
+    assert account.native.pq is not None
+    assert account.native.pq.scheme == "ml-dsa-65"

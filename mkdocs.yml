@@ -13,4 +13,5 @@ nav:
   - Algorand: chains/algorand.md
   - Solana: chains/solana.md
   - NEAR: chains/near.md
+  - Post-quantum readiness: post-quantum.md
   - Python API: api.md

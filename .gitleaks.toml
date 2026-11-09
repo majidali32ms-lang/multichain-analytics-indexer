@@ -6,4 +6,7 @@ description = "Addresses and public keys in saved test responses are public chai
 regexTarget = "line"
 regexes = [
     '''"(accountKey|auth-addr|rekey-to|selection-participation-key|state-proof-key|vote-participation-key)": "''',
+    # The Falcon public keys of the participants in an Algorand state proof, as the
+    # Indexer returns them in a state proof transaction (tests/fixtures/algorand/tx_stpf.json).
+    '''"verifying-key": "''',
 ]

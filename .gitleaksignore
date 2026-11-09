@@ -1,0 +1,4 @@
+# A public NEAR testnet account ID (calmhare3618.testnet) read as a key, because the line
+# also named access_keys_function_call. That commit's line is gone; the account is now a
+# named constant in tests/test_near_pq.py.
+5474ff0c031dbb7988362fa5862d1d730e12d105:tests/test_near_pq.py:generic-api-key:74

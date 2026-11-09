@@ -1,0 +1,23 @@
+{
+ "account": {
+  "address": "PPF57PQNUKYUGNH7SENJFOJFFD7T2QFFCWDKAZ2TCPCURLS6QU7NRFNN7Y",
+  "amount": 997014,
+  "amount-without-pending-rewards": 997014,
+  "created-at-round": 64318850,
+  "deleted": false,
+  "min-balance": 100000,
+  "pending-rewards": 0,
+  "reward-base": 218288,
+  "rewards": 0,
+  "round": 66768194,
+  "sig-type": "pqsig",
+  "status": "Offline",
+  "total-apps-opted-in": 0,
+  "total-assets-opted-in": 0,
+  "total-box-bytes": 0,
+  "total-boxes": 0,
+  "total-created-apps": 0,
+  "total-created-assets": 0
+ },
+ "current-round": 66768194
+}

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.0
+
+Adds post-quantum readiness.
+
+- Algorand: transactions signed by native Falcon-1024 accounts (`pqsig`, scheme `f1`) and
+  accounts the Indexer lists as `pqsig` carry a `pq` field in their `native` block. State
+  proof transactions never count. LogicSigs that call `falcon_verify` are not identified.
+- NEAR: transactions signed with an ML-DSA-65 key, ML-DSA-65 access keys (as `ml-dsa-65:` or
+  `ml-dsa-65-hash:`) and accounts holding one carry a `pq` field.
+- Metrics on both chains add `post_quantum`: the number and share of post-quantum
+  transactions, per scheme. `index account` shows a "Post-quantum" line.
+- `multichain-indexer pq-status` shows where each of the 10 planned chains stands, with a
+  source and the date it was checked. Only Algorand and NEAR have anything live.
+- A new `multichain_indexer.pq` package holds what every chain's detectors share; adding a
+  scheme needs no change to it or to `core`.
+
 ## 0.3.1
 
 The first 0.3 release on PyPI.

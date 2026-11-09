@@ -1,0 +1,32 @@
+{
+ "close-rewards": 0,
+ "closing-amount": 2997672,
+ "confirmed-round": 3336871,
+ "fee": 1000,
+ "first-valid": 3336842,
+ "genesis-hash": "wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=",
+ "genesis-id": "mainnet-v1.0",
+ "id": "WYZVGOAAIMRP4O3PSJZ2Y3QHUN4EFY2IDTRLRRWJKVFGAAY7DTEA",
+ "intra-round-offset": 0,
+ "last-valid": 3337842,
+ "note": "TTTxopAItuU=",
+ "payment-transaction": {
+  "amount": 1337,
+  "close-amount": 2997672,
+  "close-remainder-to": "BZNKXBBXIVZ7GFAXHNC26ERYUD5TQWWV327IU2N4SKG6WLNFGMMCRQEFZE",
+  "receiver": "BZNKXBBXIVZ7GFAXHNC26ERYUD5TQWWV327IU2N4SKG6WLNFGMMCRQEFZE"
+ },
+ "receiver-rewards": 15,
+ "round-time": 1574886142,
+ "sender": "3BUCEAOMN7AWTPPJZF2MCSUHPQ5A5LPTMFLRTGDU72UCNZNHDP5VI5J77Q",
+ "sender-rewards": 9,
+ "signature": {
+  "logicsig": {
+   "args": [
+    "VeU//+0DS6KY6Bx/ANFINUTAW9Eg6+LfRXjd6qWzohI="
+   ],
+   "logic": "ASYCIA5aq4Q3RXPzFBc7Ra8SOKD7OFrV3r6KabySjestpTMYIFXlP//tA0uimOgcfwDRSDVEwFvRIOvi30V43eqls6ISMQkoEjEHKBIQLSkSEA=="
+  }
+ },
+ "tx-type": "pay"
+}
