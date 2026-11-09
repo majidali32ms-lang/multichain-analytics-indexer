@@ -68,9 +68,14 @@ def rpc_error(code: int, message: str = "refused") -> Reply:
     return Reply({"jsonrpc": "2.0", "id": 1, "error": {"code": code, "message": message}})
 
 
+def finalized_block(number: int = WETH_BLOCK - 20) -> Reply:
+    return rpc_ok({"number": hex(number), "hash": "0x" + "11" * 32})
+
+
 def serve_weth(node: FakeNode) -> None:
     for method, reply in WETH["replies"].items():
         node.routes[f"rpc:{method}"] = Reply(reply)
+    node.routes["rpc:eth_getBlockByNumber"] = finalized_block()
 
 
 def serve_eoa(node: FakeNode, code: str = "0x") -> None:
@@ -79,6 +84,7 @@ def serve_eoa(node: FakeNode, code: str = "0x") -> None:
     node.routes["rpc:eth_getBalance"] = rpc_ok(hex(1_500_000_000_000_000_000))
     node.routes["rpc:eth_getTransactionCount"] = rpc_ok("0x7")
     node.routes["rpc:eth_getCode"] = rpc_ok(code)
+    node.routes["rpc:eth_getBlockByNumber"] = finalized_block()
 
 
 def settings_for(node: FakeNode, tmp_path: Path, chain: EvmChain, network: str) -> Settings:
@@ -263,9 +269,14 @@ async def test_contract_description(node: FakeNode, base: EvmIndexer) -> None:
     assert fields["As of block"] == str(WETH_BLOCK)
 
 
-async def test_head_is_the_latest_block(node: FakeNode, base: EvmIndexer) -> None:
+async def test_head_is_the_latest_block_and_final_height_the_finalized_one(
+    node: FakeNode, base: EvmIndexer
+) -> None:
     serve_weth(node)
+    assert base.final_height(WETH_BLOCK) == 0
     assert await base.chain_head() == WETH_BLOCK
+    assert base.final_height(WETH_BLOCK) == WETH_BLOCK - 20
+    assert base.final_height(WETH_BLOCK - 30) == WETH_BLOCK - 30
 
 
 @pytest.mark.parametrize(
@@ -376,11 +387,9 @@ async def test_chain_id_check_that_could_not_run_is_tried_again(
     assert await base.chain_head() == WETH_BLOCK
 
 
-async def test_lookups_not_built_yet_say_so(base: EvmIndexer) -> None:
+async def test_token_lookups_are_not_built_yet(base: EvmIndexer) -> None:
     with pytest.raises(UnsupportedChain, match="ERC-20 token lookups are not available yet"):
         await base.fetch_asset(WETH_ADDRESS)
-    with pytest.raises(UnsupportedChain, match="Base account history is not available yet"):
-        base.iter_account_transactions(EOA)
     assert base.chain_metrics([]) == {}
 
 

@@ -18,12 +18,21 @@ LOCALNET = "localnet"
 LOCALNET_RPC_SERVER = "http://localhost:8545"
 LOCALNET_TITLE = "a local network"
 
+# Names in the adapter's HISTORY_SOURCES.
+BLOCKSCOUT = "blockscout"
+ETHERSCAN = "etherscan"
+RPC_SCAN = "rpc-scan"
+
 
 @dataclass(frozen=True)
 class EvmNetwork:
+    """A public network. ``history_source`` is the default for account history, or None when
+    no free service lists it."""
+
     title: str
     chain_id: int
     rpc_server: str
+    history_source: str | None = BLOCKSCOUT
 
     def describe(self) -> str:
         return f"{self.title} (chain ID {self.chain_id})"
@@ -97,7 +106,8 @@ POLYGON = EvmChain(
     token_standard="ERC-20",
     networks={
         MAINNET: EvmNetwork("Polygon PoS mainnet", 137, "https://polygon.drpc.org"),
-        TESTNET: EvmNetwork("Amoy", 80002, "https://polygon-amoy.drpc.org"),
+        # Blockscout lists no Amoy explorer; Etherscan's free plan serves it.
+        TESTNET: EvmNetwork("Amoy", 80002, "https://polygon-amoy.drpc.org", ETHERSCAN),
     },
 )
 
@@ -108,9 +118,12 @@ BNB = EvmChain(
     native_symbol="BNB",
     token_standard="BEP-20",
     networks={
-        MAINNET: EvmNetwork("BNB Smart Chain mainnet", 56, "https://bsc-dataseed.bnbchain.org"),
+        # Blockscout has no BNB Smart Chain explorer, and Etherscan serves it on paid plans only.
+        MAINNET: EvmNetwork(
+            "BNB Smart Chain mainnet", 56, "https://bsc-dataseed.bnbchain.org", None
+        ),
         TESTNET: EvmNetwork(
-            "BNB Smart Chain testnet", 97, "https://bsc-testnet-dataseed.bnbchain.org"
+            "BNB Smart Chain testnet", 97, "https://bsc-testnet-dataseed.bnbchain.org", None
         ),
     },
 )

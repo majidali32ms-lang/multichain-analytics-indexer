@@ -14,6 +14,7 @@ from multichain_indexer.core.errors import (
     InvalidInput,
     MalformedResponse,
     NetworkError,
+    NotFound,
     RateLimited,
 )
 from multichain_indexer.core.http import ApiClient, JsonObject
@@ -51,12 +52,49 @@ class EvmRpc:
     async def code(self, address: str, block: int) -> bytes:
         return parse_data(await self._call("eth_getCode", [address, hex(block)]), "eth_getCode")
 
+    async def finalized_block_number(self) -> int:
+        block = await self._block("finalized", full=False)
+        return parse_quantity(block.get("number"), "eth_getBlockByNumber")
+
+    async def block_header(self, number: int, *, immutable: bool) -> JsonObject:
+        return await self._block(hex(number), full=False, immutable=immutable)
+
+    async def block_transactions(self, number: int) -> list[JsonObject]:
+        transactions = (await self._block(hex(number), full=True)).get("transactions")
+        if not isinstance(transactions, list) or not all(isinstance(t, dict) for t in transactions):
+            raise MalformedResponse("eth_getBlockByNumber: expected a list of transactions")
+        return [transaction for transaction in transactions if isinstance(transaction, dict)]
+
+    async def transaction(self, tx_hash: str) -> JsonObject | None:
+        """Return a transaction, or None when the node does not know it."""
+        return await self._object_or_none("eth_getTransactionByHash", tx_hash)
+
+    async def receipt(self, tx_hash: str) -> JsonObject | None:
+        """Return a receipt, or None while the transaction is not in a block."""
+        return await self._object_or_none("eth_getTransactionReceipt", tx_hash)
+
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    async def _call(self, method: str, params: list[JsonValue]) -> JsonValue:
+    async def _block(self, tag: str, *, full: bool, immutable: bool = False) -> JsonObject:
+        block = await self._call("eth_getBlockByNumber", [tag, full], immutable=immutable)
+        if not isinstance(block, dict):
+            raise NotFound(f"block {tag} is not available from this RPC endpoint")
+        return block
+
+    async def _object_or_none(self, method: str, tx_hash: str) -> JsonObject | None:
+        result = await self._call(method, [tx_hash])
+        if result is None:
+            return None
+        if not isinstance(result, dict):
+            raise MalformedResponse(f"{method}: expected an object")
+        return result
+
+    async def _call(
+        self, method: str, params: list[JsonValue], *, immutable: bool = False
+    ) -> JsonValue:
         payload: JsonObject = {"jsonrpc": "2.0", "id": 1, "method": method, "params": params}
-        reply = await self._client.post_json(RPC_PATH, payload)
+        reply = await self._client.post_json(RPC_PATH, payload, immutable=immutable)
         error = reply.get("error")
         if error is not None:
             raise _error_for(method, error)
