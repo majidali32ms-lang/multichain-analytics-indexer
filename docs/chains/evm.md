@@ -109,6 +109,11 @@ Polygon's documented Amoy endpoint, dRPC, timed out on 2 and 3 of 30 requests in
 test and failed 29 of 30 later the same day, so Amoy's default is Tenderly's gateway, which
 Polygon's docs list as a provider: 0 of 30 failed.
 
+A history service indexes a little behind the chain: Blockscout's API was about 22 blocks
+behind on Ethereum, and NodeReal refuses a range that ends past its newest indexed block. A
+sync never moves its checkpoint past the finalized block, nor past the block NodeReal
+reached, so what a service has not indexed yet is listed by the next sync.
+
 History holds the transactions an address sent or received. A token transfer to the address
 inside someone else's contract call is not included yet.
 
