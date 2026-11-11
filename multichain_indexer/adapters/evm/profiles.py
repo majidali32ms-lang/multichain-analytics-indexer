@@ -93,8 +93,10 @@ BASE = EvmChain(
     native_symbol="ETH",
     token_standard="ERC-20",
     networks={
-        MAINNET: EvmNetwork("Base Mainnet", 8453, "https://mainnet.base.org"),
-        TESTNET: EvmNetwork("Base Sepolia", 84532, "https://sepolia.base.org"),
+        # Blockscout's free plan dropped Base on 2026-10-01 and Etherscan's never had it, so
+        # neither is a default; the owner chooses a free source.
+        MAINNET: EvmNetwork("Base Mainnet", 8453, "https://mainnet.base.org", None),
+        TESTNET: EvmNetwork("Base Sepolia", 84532, "https://sepolia.base.org", None),
     },
 )
 
@@ -105,8 +107,9 @@ POLYGON = EvmChain(
     native_symbol="POL",
     token_standard="ERC-20",
     networks={
-        MAINNET: EvmNetwork("Polygon PoS mainnet", 137, "https://polygon.drpc.org"),
-        # Blockscout lists no Amoy explorer; Etherscan's free plan serves it.
+        # Blockscout's free plan dropped Polygon on 2026-10-01 and lists no Amoy explorer;
+        # Etherscan's free plan answers on both, as checked on 2026-11-11.
+        MAINNET: EvmNetwork("Polygon PoS mainnet", 137, "https://polygon.drpc.org", ETHERSCAN),
         TESTNET: EvmNetwork("Amoy", 80002, "https://polygon-amoy.drpc.org", ETHERSCAN),
     },
 )

@@ -80,7 +80,9 @@ class EvmTransaction(NativeData):
     ``kind`` names the transaction type (``legacy``, ``eip-2930``, ``eip-1559``,
     ``eip-4844``, ``eip-7702``, ``deposit``), or ``type N`` for one this version does not
     name. ``execution_fee`` is ``gas_used * effective_gas_price``; the record's ``fee`` adds
-    the blob fee and the L1 data fee where the chain charges them.
+    the blob fee and the L1 data fee where the chain charges them. ``history_source`` names
+    the service that listed the transaction for an account's history, such as ``etherscan``;
+    it is None for a transaction read by hash.
     """
 
     kind: str
@@ -103,3 +105,4 @@ class EvmTransaction(NativeData):
     blob: EvmBlobGas | None = None
     l1_data: EvmL1DataFee | None = None
     arbitrum: EvmArbitrumGas | None = None
+    history_source: str | None = None

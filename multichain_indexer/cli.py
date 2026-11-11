@@ -33,6 +33,9 @@ _T = TypeVar("_T")
 
 DEFAULT_RECENT_TRANSACTIONS = 10
 EVM_CHAINS = ("ethereum", "arbitrum", "optimism", "base", "polygon", "bnb")
+# Lines a data provider's terms require wherever its data is shown, keyed by the history
+# source named in a record's native block. Human-readable output only, never in exports.
+ATTRIBUTIONS = {"etherscan": "Powered by Etherscan.io APIs"}
 # The exit code Click uses when the reader of a pipe goes away, as in `... | head`.
 EXIT_OUTPUT_CLOSED = 1
 # A write to a closed pipe fails with EPIPE on Linux and EINVAL on Windows.
@@ -138,8 +141,11 @@ def index_account(indexer: Indexer, address: str, limit: int) -> None:
     """Show an account's state, balance in ALGO, SOL or NEAR, and its recent transactions."""
     _echo_fields(indexer.describe(indexer.account(address)))
     click.echo()
-    for record in indexer.account_transactions(address, limit=limit):
+    records = indexer.account_transactions(address, limit=limit)
+    for record in records:
         click.echo(_transaction_line(indexer, record))
+    for line in _attributions(records):
+        click.echo(line)
 
 
 @index.command("asset")
@@ -334,6 +340,11 @@ def _echo_fields(fields: dict[str, str]) -> None:
     width = max(len(label) for label in fields)
     for label, value in fields.items():
         click.echo(f"{label.ljust(width)}  {value}")
+
+
+def _attributions(records: list[TransactionRecord]) -> list[str]:
+    sources = {getattr(record.native, "history_source", None) for record in records}
+    return [line for source, line in ATTRIBUTIONS.items() if source in sources]
 
 
 def _transaction_line(indexer: Indexer, record: TransactionRecord) -> str:

@@ -307,6 +307,7 @@ async def test_history_records_come_from_the_rpc(node: FakeNode, tmp_path: Path)
     (record,) = page.records
     assert record.id == NATIVE_HASH
     assert record.status is Status.FINAL
+    assert record.native.history_source == "blockscout"
     assert record.native.token_transfers
     assert node.rpc_params("eth_getTransactionReceipt") == [[NATIVE_HASH]]
     assert node.rpc_params("eth_getBlockByNumber") == [
@@ -361,7 +362,7 @@ async def test_requests_are_counted_across_rpc_and_explorer(node: FakeNode, tmp_
     [
         (ETHEREUM, "mainnet", "blockscout"),
         (ETHEREUM, "testnet", "blockscout"),
-        (POLYGON, "mainnet", "blockscout"),
+        (POLYGON, "mainnet", "etherscan"),
         (POLYGON, "testnet", "etherscan"),
         (ETHEREUM, "localnet", "rpc-scan"),
     ],
@@ -415,14 +416,19 @@ def test_explorers_do_not_serve_local_networks() -> None:
 
 
 @pytest.mark.parametrize(
-    ("network", "title"),
-    [("mainnet", "BNB Smart Chain mainnet"), ("testnet", "BNB Smart Chain testnet")],
+    ("chain", "network", "title"),
+    [
+        (BNB, "mainnet", "BNB Smart Chain mainnet"),
+        (BNB, "testnet", "BNB Smart Chain testnet"),
+        (BASE, "mainnet", "Base Mainnet"),
+        (BASE, "testnet", "Base Sepolia"),
+    ],
 )
-async def test_bnb_without_a_free_history_service_says_so(
-    node: FakeNode, tmp_path: Path, network: str, title: str
+async def test_networks_without_a_free_history_service_say_so(
+    node: FakeNode, tmp_path: Path, chain: EvmChain, network: str, title: str
 ) -> None:
-    node.routes["rpc:eth_chainId"] = rpc_ok(hex(BNB.networks[network].chain_id))
-    adapter = adapter_for(explorer_settings(node, tmp_path, BNB, network), BNB, network)
+    node.routes["rpc:eth_chainId"] = rpc_ok(hex(chain.networks[network].chain_id))
+    adapter = adapter_for(explorer_settings(node, tmp_path, chain, network), chain, network)
     try:
         with pytest.raises(UnsupportedChain, match=f"{title} has no free account history"):
             await anext(adapter.iter_account_transactions(ACCOUNT))
@@ -441,6 +447,7 @@ async def test_transaction_by_hash(node: FakeNode, tmp_path: Path) -> None:
     finally:
         await adapter.aclose()
     assert record.id == NATIVE_HASH
+    assert record.native.history_source is None
 
 
 @pytest.mark.parametrize("tx_hash", ["", "0x1234", NATIVE_HASH[2:], NATIVE_HASH[:-1] + "g"])
@@ -659,3 +666,57 @@ def test_description_names_bep20_and_nft_transfers() -> None:
     assert fields["Fee"].endswith(" BNB")
     del raw["receipt"]["logs"][0]
     assert describe(BNB, raw)["Token transfers"] == "1 NFT"
+
+
+def cli_environment(monkeypatch: pytest.MonkeyPatch, node: FakeNode, **extra: str) -> None:
+    for name, value in {
+        "ETHEREUM_TESTNET_RPC_SERVER": node.url,
+        "ETHEREUM_TESTNET_HISTORY_SERVER": node.url,
+        "BLOCKSCOUT_API_KEY": BLOCKSCOUT_KEY,
+        "ETHERSCAN_API_KEY": ETHERSCAN_KEY,
+        "MCI_MAX_RETRIES": "0",
+        "MCI_REQUESTS_PER_SECOND": "1000",
+        **extra,
+    }.items():
+        monkeypatch.setenv(name, value)
+
+
+def run_cli(tmp_path: Path, *arguments: str) -> Any:
+    options = ["--db", str(tmp_path / "cli.db"), "--env-file", str(tmp_path / "none.env")]
+    return CliRunner().invoke(cli, [*options, "--chain", "ethereum", *arguments])
+
+
+ATTRIBUTION = "Powered by Etherscan.io APIs"
+
+
+def test_etherscan_data_is_shown_with_its_attribution_line(
+    node: FakeNode, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rpc_server(node, finalized=NATIVE_BLOCK)
+    node.handlers[EXPLORER_PATH] = explorer_server(ROWS[:1])
+    cli_environment(monkeypatch, node, ETHEREUM_TESTNET_HISTORY_SOURCE="etherscan")
+    shown = run_cli(tmp_path, "index", "account", ACCOUNT)
+    assert shown.exit_code == 0, shown.output
+    assert shown.stdout.splitlines()[-1] == ATTRIBUTION
+    assert shown.stdout.count(ATTRIBUTION) == 1
+    assert ATTRIBUTION not in shown.stderr
+
+    assert run_cli(tmp_path, "sync", ACCOUNT).exit_code == 0
+    for export_format in ("json", "csv"):
+        exported = run_cli(tmp_path, "export", "--format", export_format)
+        assert exported.exit_code == 0, exported.output
+        assert ATTRIBUTION not in exported.stdout
+    (row,) = json.loads(run_cli(tmp_path, "export", "--format", "json").stdout)
+    assert json.loads(row["native"])["history_source"] == "etherscan"
+
+
+def test_other_sources_print_no_attribution(
+    node: FakeNode, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rpc_server(node, finalized=NATIVE_BLOCK)
+    node.handlers[EXPLORER_PATH] = explorer_server(ROWS[:1])
+    cli_environment(monkeypatch, node)
+    shown = run_cli(tmp_path, "index", "account", ACCOUNT)
+    assert shown.exit_code == 0, shown.output
+    assert NATIVE_HASH in shown.stdout
+    assert ATTRIBUTION not in shown.output

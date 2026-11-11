@@ -98,6 +98,7 @@ class EvmIndexer(BaseIndexer):
         self._rpc = rpc
         self._settings = settings
         self._history: HistorySource | None = None
+        self._history_name: str | None = None
         self._chain_confirmed = False
         self._finalized_height = 0
 
@@ -177,7 +178,10 @@ class EvmIndexer(BaseIndexer):
             page = await history.account_page(
                 account, from_height=from_height, to_height=to_height, cursor=next_cursor
             )
-            records = [await self._transaction_record(tx_hash) for tx_hash in page.hashes]
+            records = [
+                await self._transaction_record(tx_hash, self._history_name)
+                for tx_hash in page.hashes
+            ]
             found = tuple(record for record in records if record is not None)
             if found:
                 yield TransactionPage(records=found, next_cursor=page.next_cursor)
@@ -225,7 +229,9 @@ class EvmIndexer(BaseIndexer):
         factory = HISTORY_SOURCES.get(name)
         if factory is None:
             raise ConfigError(f"{setting} must be one of: {choices}")
-        return factory(SourceContext(self.chain, self.network, self._settings, self._rpc))
+        source = factory(SourceContext(self.chain, self.network, self._settings, self._rpc))
+        self._history_name = name
+        return source
 
     def _default_history_source(self) -> str | None:
         if self.network == LOCALNET:
@@ -235,7 +241,9 @@ class EvmIndexer(BaseIndexer):
     async def _refresh_finalized_height(self) -> None:
         self._finalized_height = await self._rpc.finalized_block_number()
 
-    async def _transaction_record(self, tx_hash: str) -> TransactionRecord | None:
+    async def _transaction_record(
+        self, tx_hash: str, history_source: str | None = None
+    ) -> TransactionRecord | None:
         receipt = await self._rpc.receipt(tx_hash)
         transaction = await self._rpc.transaction(tx_hash) if receipt else None
         if receipt is None or transaction is None:
@@ -249,6 +257,7 @@ class EvmIndexer(BaseIndexer):
             chain=self.chain.name,
             network=self.network,
             final=final,
+            history_source=history_source,
         )
 
     async def _require_chain(self) -> None:

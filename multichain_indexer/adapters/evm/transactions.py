@@ -57,7 +57,12 @@ class RawTransaction:
 
 
 def parse_transaction(
-    raw: RawTransaction, *, chain: str, network: str, final: bool
+    raw: RawTransaction,
+    *,
+    chain: str,
+    network: str,
+    final: bool,
+    history_source: str | None = None,
 ) -> TransactionRecord:
     """Build the record; ``final`` says whether the block is past the chain's finality rule.
 
@@ -65,7 +70,9 @@ def parse_transaction(
         MalformedResponse: A field is missing or does not have its documented format.
     """
     transaction, receipt, block = raw.transaction, raw.receipt, raw.block
-    native = _native(transaction, receipt, block)
+    native = _native(transaction, receipt, block).model_copy(
+        update={"history_source": history_source}
+    )
     return TransactionRecord(
         id=_text(transaction, "hash"),
         time=datetime.fromtimestamp(_quantity(block, "timestamp"), tz=UTC),

@@ -348,8 +348,8 @@ fields such as `l1Fee` (OP Mainnet, Base), `gasUsedForL1` (Arbitrum) and blob ga
 | Ethereum | Blockscout | Blockscout (Sepolia) |
 | Arbitrum | Blockscout | Blockscout (Arbitrum Sepolia) |
 | OP Mainnet | Blockscout | Blockscout (OP Sepolia) |
-| Base | Blockscout | Blockscout (Base Sepolia) |
-| Polygon PoS | Blockscout | Etherscan (Amoy; Blockscout lists no Amoy explorer) |
+| Polygon PoS | Etherscan | Etherscan (Amoy) |
+| Base | none yet | none yet |
 | BNB Smart Chain | none yet | none: transactions can be read by hash only |
 | any chain, `--network localnet` | reads every block over the RPC (Anvil) | |
 
@@ -359,24 +359,41 @@ the chosen service's free key:
 
 | Setting | Where to get it | Free plan, as its provider states it |
 |---|---|---|
-| `BLOCKSCOUT_API_KEY` | dev.blockscout.com, no card needed | 5 requests a second and 100,000 credits a day (a history page costs 20, so about 5,000 pages); requests fail once the day's credits are used. |
-| `ETHERSCAN_API_KEY` | etherscan.io | 3 requests a second, 100,000 a day, at most 1,000 records a request since 1 July 2026. Free on Ethereum, Arbitrum and Polygon and their testnets; Base, OP Mainnet and BNB Smart Chain need a paid plan. |
+| `BLOCKSCOUT_API_KEY` | dev.blockscout.com, no card needed | 5 requests a second and 100,000 credits a day (a history page costs 20, so about 5,000 pages); requests fail once the day's credits are used. Base, Polygon and zkSync left the free plan on 1 October 2026. |
+| `ETHERSCAN_API_KEY` | etherscan.io | 3 requests a second, 100,000 a day, at most 1,000 records a request since 1 July 2026. Selected chains only. |
 
-Each provider's terms apply to your key, not this project's:
+What each free plan answered on 11 November 2026, with one request per network:
+
+| Network | Blockscout | Etherscan |
+|---|---|---|
+| Ethereum, Sepolia | yes | yes |
+| Arbitrum One, Arbitrum Sepolia | yes | yes |
+| OP Mainnet | yes | no, paid plan |
+| OP Sepolia | yes | yes |
+| Base Mainnet | no, HTTP 402 | no, paid plan |
+| Base Sepolia | no, HTTP 402 | yes, although Etherscan lists it as paid |
+| Polygon PoS mainnet | no, HTTP 402 | yes |
+| Amoy | not listed | yes |
+| BNB Smart Chain, mainnet and testnet | not listed | no, paid plan |
+
+Free plans change: a source that answers today may need a paid plan later. Each provider's
+terms apply to your key, not this project's:
 
 - **Etherscan** ([API terms](https://etherscan.io/apiterms)): the free plan is for personal
   and research use only; anywhere you display or publish data obtained through it, show
   "Powered by Etherscan.io APIs" with a link to etherscan.io (not needed for purely private
   use); do not bulk-download, mirror or archive its data, pass it on to third parties through
-  a proxy, or put your key in public code.
+  a proxy, or put your key in public code. `index account` prints that line under
+  transactions Etherscan listed, and every such record carries
+  `native.history_source = "etherscan"`, also in CSV, JSON and Parquet exports.
 - **Blockscout** ([terms](https://eaas.blockscout.com/terms-and-conditions)): no
   API-specific clause on attribution or storing results was found. The licence is revocable,
   and access or limits can change without notice.
 
 A history service is a third party: it can be behind the chain, list a transaction the RPC
 does not have yet, or change its limits. A listed transaction the RPC does not have is left
-out and fetched on a later sync. The free sources list the transactions an address sent or
-received; a token transfer to the address inside someone else's contract call is not listed.
+out and fetched on a later sync. History holds the transactions an address sent or received;
+a token transfer to the address inside someone else's contract call is not included yet.
 
 ## Post-quantum signatures
 
