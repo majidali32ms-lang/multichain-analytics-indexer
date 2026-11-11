@@ -9,4 +9,7 @@ regexes = [
     # The Falcon public keys of the participants in an Algorand state proof, as the
     # Indexer returns them in a state proof transaction (tests/fixtures/algorand/tx_stpf.json).
     '''"verifying-key": "''',
+    # NodeReal's paging cursor, base64 of the category, block and position it stopped at, such
+    # as "external:133012680_1062739," (tests/fixtures/evm/history_bsc_nodereal.json).
+    '''"pageKey": "''',
 ]
