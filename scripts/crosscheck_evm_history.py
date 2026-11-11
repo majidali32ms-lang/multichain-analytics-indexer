@@ -1,10 +1,13 @@
 """Compare EVM account history from Blockscout with the same history from Etherscan.
 
 Both serve the Etherscan-compatible txlist. For sample addresses on Ethereum, Arbitrum and
-Polygon PoS mainnet, the chains where both have a free plan, it walks each address's whole
-list through this project's own history source and reports the transactions only one service
-lists. It needs BLOCKSCOUT_API_KEY and ETHERSCAN_API_KEY in the environment or in .env. It is a
-sample, not proof of completeness.
+Polygon PoS mainnet, it walks each address's list up to the chain's finalized block through
+this project's own history source and reports the transactions only one service lists. Newer
+blocks are left out: an explorer indexes them a few minutes late (Blockscout was about 22
+blocks behind on Ethereum on 2026-11-11), which would look like a difference. It needs
+BLOCKSCOUT_API_KEY and ETHERSCAN_API_KEY in the environment or in .env. It is a sample, not
+proof of completeness. Blockscout's free plan no longer serves Polygon PoS, so those samples
+fail with HTTP 402.
 
     python scripts/crosscheck_evm_history.py
     python scripts/crosscheck_evm_history.py ethereum 0xAddress arbitrum 0xAddress
@@ -51,6 +54,7 @@ class Sample:
 @dataclass(frozen=True)
 class Comparison:
     sample: Sample
+    up_to_block: int
     blockscout: frozenset[str]
     etherscan: frozenset[str]
 
@@ -59,7 +63,8 @@ class Comparison:
         only_etherscan = sorted(self.etherscan - self.blockscout)
         verdict = "same" if not (only_blockscout or only_etherscan) else "DIFFERENT"
         lines = [
-            f"{self.sample.chain.name} {self.sample.address}: Blockscout "
+            f"{self.sample.chain.name} {self.sample.address} up to block {self.up_to_block}: "
+            "Blockscout "
             f"{len(self.blockscout)}, Etherscan {len(self.etherscan)}, {verdict}"
         ]
         lines += [f"  only Blockscout: {tx_hash}" for tx_hash in only_blockscout]
@@ -120,22 +125,25 @@ async def _short_histories(chain: EvmChain, rpc: EvmRpc) -> list[Sample]:
 async def _compare(sample: Sample, settings: Settings) -> Comparison:
     rpc = _rpc(sample.chain, settings)
     try:
+        finalized = await rpc.finalized_block_number()
         listed = [
-            await _all_hashes(_history(service, sample.chain, settings, rpc), sample.address)
+            await _all_hashes(
+                _history(service, sample.chain, settings, rpc), sample.address, finalized
+            )
             for service in (BLOCKSCOUT, ETHERSCAN)
         ]
     finally:
         await rpc.aclose()
-    return Comparison(sample, listed[0], listed[1])
+    return Comparison(sample, finalized, listed[0], listed[1])
 
 
-async def _all_hashes(history: HistorySource, address: str) -> frozenset[str]:
+async def _all_hashes(history: HistorySource, address: str, up_to: int) -> frozenset[str]:
     hashes: set[str] = set()
     cursor = None
     try:
         while True:
             page = await history.account_page(
-                address, from_height=None, to_height=None, cursor=cursor
+                address, from_height=None, to_height=up_to, cursor=cursor
             )
             hashes.update(tx_hash.lower() for tx_hash in page.hashes)
             if page.next_cursor is None:
