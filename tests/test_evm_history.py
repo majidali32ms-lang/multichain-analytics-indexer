@@ -746,3 +746,81 @@ async def test_receipt_from_a_replaced_block_is_left_for_the_next_sync(
     assert first.records_fetched == 0
     assert second.records_fetched == 1
     assert [record.status for record in stored] == [Status.PENDING]
+
+
+class ReorgChain:
+    """A Sepolia RPC whose blocks and receipts a test can change between syncs."""
+
+    def __init__(self, node: FakeNode) -> None:
+        self.finalized = NATIVE_BLOCK - 1
+        self.receipt: dict[str, Any] | None = NATIVE["receipt"]
+        self.block_hash = NATIVE["block"]["hash"]
+        rpc_server(node, finalized=self.finalized)
+        node.handlers["rpc:eth_getBlockByNumber"] = self.block
+        node.handlers["rpc:eth_getTransactionReceipt"] = lambda params: rpc_ok(self.receipt)
+
+    def block(self, params: list[Any]) -> Reply:
+        if params[0] == "finalized":
+            return rpc_ok({"number": hex(self.finalized)})
+        return rpc_ok({**NATIVE["block"], "hash": self.block_hash})
+
+
+async def pending_then_rechecked(
+    node: FakeNode, tmp_path: Path, change: Callable[[ReorgChain], None]
+) -> tuple[Status, Any]:
+    chain = ReorgChain(node)
+    node.handlers[EXPLORER_PATH] = explorer_server(ROWS[:1])
+    with Indexer("ethereum", settings=explorer_settings(node, tmp_path)) as indexer:
+        first = indexer.sync(ACCOUNT)
+        (stored,) = indexer.stored_transactions(account=first.account)
+        assert stored.status is Status.PENDING
+        node.handlers[EXPLORER_PATH] = explorer_server([])
+        change(chain)
+        indexer.sync(ACCOUNT)
+        (after,) = indexer.stored_transactions(account=first.account)
+    return after.status, after
+
+
+def reorged(chain: ReorgChain) -> None:
+    chain.finalized = NATIVE_BLOCK + 10
+    chain.receipt = None
+    chain.block_hash = "0x" + "dd" * 32
+
+
+async def test_a_pending_transaction_a_reorg_dropped_becomes_orphaned(
+    node: FakeNode, tmp_path: Path
+) -> None:
+    status, record = await pending_then_rechecked(node, tmp_path, reorged)
+    assert status is Status.ORPHANED
+    assert record.id == NATIVE_HASH
+
+
+def receipt_gone_block_kept(chain: ReorgChain) -> None:
+    chain.finalized = NATIVE_BLOCK + 10
+    chain.receipt = None
+
+
+def receipt_gone_not_final(chain: ReorgChain) -> None:
+    chain.receipt = None
+    chain.block_hash = "0x" + "dd" * 32
+
+
+def finalized_in_place(chain: ReorgChain) -> None:
+    chain.finalized = NATIVE_BLOCK + 10
+
+
+@pytest.mark.parametrize(
+    ("change", "expected"),
+    [
+        (receipt_gone_block_kept, Status.PENDING),
+        (receipt_gone_not_final, Status.PENDING),
+        (finalized_in_place, Status.FINAL),
+        (lambda chain: None, Status.PENDING),
+    ],
+    ids=["receipt-missing-same-block", "not-final-yet", "now-final", "unchanged"],
+)
+async def test_only_a_proven_reorg_orphans_a_record(
+    node: FakeNode, tmp_path: Path, change: Callable[[ReorgChain], None], expected: Status
+) -> None:
+    status, _ = await pending_then_rechecked(node, tmp_path, change)
+    assert status is expected

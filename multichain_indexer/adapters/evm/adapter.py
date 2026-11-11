@@ -65,6 +65,7 @@ from multichain_indexer.core.models import (
     AccountRecord,
     AssetRecord,
     ContractRecord,
+    Status,
     TransactionPage,
     TransactionRecord,
 )
@@ -216,16 +217,41 @@ class EvmIndexer(BaseIndexer):
             page = await history.account_page(
                 account, from_height=from_height, to_height=to_height, cursor=next_cursor
             )
-            records = [
-                await self._transaction_record(tx_hash, self._history_name)
-                for tx_hash in page.hashes
-            ]
-            found = tuple(record for record in records if record is not None)
+            found = tuple(
+                [
+                    record
+                    for tx_hash in page.hashes
+                    if (record := await self._listed_record(tx_hash)) is not None
+                ]
+            )
             if found:
                 yield TransactionPage(records=found, next_cursor=page.next_cursor)
             if page.next_cursor is None:
                 return
             next_cursor = page.next_cursor
+
+    async def recheck_pending(
+        self, records: Sequence[TransactionRecord]
+    ) -> list[TransactionRecord]:
+        """Read stored pending transactions again from the RPC.
+
+        A transaction found again comes back with its current block and status. One the
+        RPC no longer has becomes orphaned only when its block's height is finalized and
+        holds another block now, which proves a reorg; a missing receipt alone could also
+        mean an endpoint that dropped old receipts, so such a record is left as it is.
+        """
+        await self._require_chain()
+        await self._refresh_finalized_height()
+        changed = []
+        for record in records:
+            native = cast(EvmTransaction, record.native)
+            current = await self._transaction_record(record.id, native.history_source)
+            if current is not None:
+                if current != record:
+                    changed.append(current)
+            elif await self._block_was_replaced(native):
+                changed.append(record.model_copy(update={"status": Status.ORPHANED}))
+        return changed
 
     def chain_metrics(self, records: Sequence[TransactionRecord]) -> dict[str, JsonValue]:
         return evm_metrics(
@@ -285,13 +311,24 @@ class EvmIndexer(BaseIndexer):
     async def _refresh_finalized_height(self) -> None:
         self._finalized_height = await self._rpc.finalized_block_number()
 
+    async def _listed_record(self, tx_hash: str) -> TransactionRecord | None:
+        record = await self._transaction_record(tx_hash, self._history_name)
+        if record is None:
+            _log_missing(tx_hash)
+        return record
+
+    async def _block_was_replaced(self, native: EvmTransaction) -> bool:
+        if native.block_number > self._finalized_height:
+            return False
+        block = await self._rpc.block_header(native.block_number, immutable=True)
+        return block.get("hash") != native.block_hash
+
     async def _transaction_record(
         self, tx_hash: str, history_source: str | None = None
     ) -> TransactionRecord | None:
         receipt = await self._rpc.receipt(tx_hash)
         transaction = await self._rpc.transaction(tx_hash) if receipt else None
         if receipt is None or transaction is None:
-            _log_missing(tx_hash)
             return None
         block_number = _block_number(receipt)
         final = block_number <= self._finalized_height
