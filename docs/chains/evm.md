@@ -72,6 +72,10 @@ fields are read as the chain reports them:
   finalized block, so pending records are read again.
 - A receipt whose block hash is not the chain's block at that height came from a block a
   reorg replaced. It is not stored; the next sync finds the transaction where it landed.
+- After each sync, pending records the history did not list again are read again from the
+  RPC. One found again is updated. One the RPC no longer has becomes `orphaned`, and is kept,
+  only when its height is finalized and holds another block now; a missing receipt alone
+  could be an endpoint that dropped old receipts, so that record stays `pending`.
 
 ## Account history
 
@@ -135,7 +139,5 @@ inside someone else's contract call is not included yet.
 ## Limits
 
 - `localnet` was tested against a local fake server, not a real Anvil node.
-- A record that a reorg dropped for good stays `pending`; marking it `orphaned` needs the
-  sync pipeline to look stored records up again, a change to `core/` not made yet.
 - History services are third parties with their own limits, which change: Blockscout's free
   plan dropped Base and Polygon on 1 October 2026.
