@@ -18,7 +18,6 @@ from multichain_indexer import (
     NetworkError,
     NotFound,
     RateLimited,
-    UnsupportedChain,
     WrongNetwork,
 )
 from multichain_indexer.adapters.evm import EvmIndexer
@@ -353,9 +352,10 @@ async def test_endpoint_serving_another_network_is_refused_before_any_other_call
     [
         lambda adapter: adapter.fetch_account(EOA),
         lambda adapter: adapter.fetch_contract(WETH_ADDRESS),
+        lambda adapter: adapter.fetch_asset(WETH_ADDRESS),
         lambda adapter: adapter.chain_head(),
     ],
-    ids=["account", "contract", "head"],
+    ids=["account", "contract", "token", "head"],
 )
 async def test_every_lookup_checks_the_chain_id_first(
     node: FakeNode, base: EvmIndexer, lookup: Callable[[EvmIndexer], Awaitable[object]]
@@ -387,9 +387,7 @@ async def test_chain_id_check_that_could_not_run_is_tried_again(
     assert await base.chain_head() == WETH_BLOCK
 
 
-async def test_token_lookups_are_not_built_yet(base: EvmIndexer) -> None:
-    with pytest.raises(UnsupportedChain, match="ERC-20 token lookups are not available yet"):
-        await base.fetch_asset(WETH_ADDRESS)
+def test_metrics_of_no_records(base: EvmIndexer) -> None:
     assert base.chain_metrics([])["fees_eth"] == "0"
 
 
@@ -520,3 +518,12 @@ async def test_localnet_names_itself_in_messages(node: FakeNode, tmp_path: Path)
             await adapter.fetch_contract(EOA)
     finally:
         await adapter.aclose()
+
+
+def test_default_rpc_rate_is_measured_and_configurable() -> None:
+    adapter = create_indexer("base", None, Settings())
+    assert adapter._rpc._client._limiter._interval == pytest.approx(0.2)
+    configured = create_indexer(
+        "base", None, Settings.from_env(None, environ={"MCI_REQUESTS_PER_SECOND": "50"})
+    )
+    assert configured._rpc._client._limiter._interval == pytest.approx(0.02)

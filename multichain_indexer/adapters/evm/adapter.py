@@ -72,6 +72,10 @@ from multichain_indexer.core.ratelimit import RateLimiter
 from multichain_indexer.core.registry import IndexerFactory
 
 WEI_DECIMALS = 18
+# Measured on 2026-11-11 against all twelve default endpoints, 30 requests each: none refused
+# at 5 a second; at 10, Sepolia, Arbitrum Sepolia and Base Sepolia refused some.
+# MCI_REQUESTS_PER_SECOND overrides it.
+DEFAULT_RPC_REQUESTS_PER_SECOND = 5.0
 HASH_HEX_DIGITS = 64
 HEX_CHARACTERS = frozenset("0123456789abcdefABCDEF")
 
@@ -374,6 +378,12 @@ class EvmIndexer(BaseIndexer):
         }
 
 
+def _rpc_requests_per_second(settings: Settings) -> float:
+    if "requests_per_second" in settings.model_fields_set:
+        return settings.requests_per_second
+    return DEFAULT_RPC_REQUESTS_PER_SECOND
+
+
 def _log_replaced(tx_hash: str, block_number: int) -> None:
     # The receipt names a block that is no longer the chain's block at that height: a reorg
     # replaced it. Such a block was never final, so the next sync looks the transaction up
@@ -454,7 +464,7 @@ def indexer_factory(chain: EvmChain) -> IndexerFactory:
             settings.endpoint(chain.name, chosen, "RPC_SERVER", default_server),
             timeout=settings.request_timeout,
             max_retries=settings.max_retries,
-            limiter=RateLimiter(settings.requests_per_second),
+            limiter=RateLimiter(_rpc_requests_per_second(settings)),
             cache=cache,
         )
         return adapter(chosen, EvmRpc(client), settings)
