@@ -26,7 +26,12 @@ from multichain_indexer.adapters.evm.history import (
     SourceContext,
 )
 from multichain_indexer.adapters.evm.metrics import evm_metrics
-from multichain_indexer.adapters.evm.models import EvmAccount, EvmContract, EvmTransaction
+from multichain_indexer.adapters.evm.models import (
+    EvmAccount,
+    EvmContract,
+    EvmToken,
+    EvmTransaction,
+)
 from multichain_indexer.adapters.evm.nodereal import create_nodereal_history
 from multichain_indexer.adapters.evm.parser import (
     is_contract_code,
@@ -44,6 +49,7 @@ from multichain_indexer.adapters.evm.profiles import (
     EvmChain,
 )
 from multichain_indexer.adapters.evm.scan import create_rpc_scan_history
+from multichain_indexer.adapters.evm.tokens import read_token
 from multichain_indexer.adapters.evm.transactions import RawTransaction, parse_transaction
 from multichain_indexer.core.base_indexer import BaseIndexer, ChainProfile
 from multichain_indexer.core.config import Settings
@@ -123,7 +129,29 @@ class EvmIndexer(BaseIndexer):
         )
 
     async def fetch_asset(self, asset_id: str) -> AssetRecord:
-        raise UnsupportedChain(f"{self.chain.token_standard} token lookups are not available yet")
+        """Return an ERC-20 (BEP-20 on BNB Smart Chain) token by its contract address.
+
+        Raises:
+            NotFound: No contract is deployed at the address.
+            InvalidInput: The contract is not a token.
+        """
+        address = self.validate_address(asset_id)
+        await self._require_chain()
+        block = await self._rpc.block_number()
+        if not is_contract_code(await self._rpc.code(address, block)):
+            raise NotFound(f"no contract is deployed at {address} on {self._network_title()}")
+
+        async def call(data: bytes) -> bytes | None:
+            return await self._rpc.call(address, data, block)
+
+        return await read_token(
+            call,
+            address=address,
+            block_number=block,
+            standard=self.chain.token_standard,
+            chain=self.chain.name,
+            network=self.network,
+        )
 
     async def fetch_contract(self, contract_id: str) -> ContractRecord:
         address = self.validate_address(contract_id)
@@ -206,7 +234,9 @@ class EvmIndexer(BaseIndexer):
             return self._describe_transaction(record)
         if isinstance(record, AccountRecord):
             return self._describe_account(record)
-        return _describe_contract(cast(ContractRecord, record))
+        if isinstance(record, AssetRecord):
+            return _describe_token(record)
+        return _describe_contract(record)
 
     @property
     def requests_made(self) -> int:
@@ -373,6 +403,20 @@ def _validate_hash(tx_hash: str) -> None:
 
 def _block_number(receipt: dict[str, JsonValue]) -> int:
     return parse_quantity(receipt.get("blockNumber"), "eth_getTransactionReceipt")
+
+
+def _describe_token(record: AssetRecord) -> dict[str, str]:
+    native = cast(EvmToken, record.native)
+    decimals = str(record.decimals) if native.decimals_declared else "not declared, so 0"
+    return {
+        "Token": record.id,
+        "Standard": native.standard,
+        "Name": record.name or "not declared",
+        "Symbol": record.unit or "not declared",
+        "Decimals": decimals,
+        "Total supply": f"{record.total} base units",
+        "As of block": str(native.block_number),
+    }
 
 
 def _describe_contract(record: ContractRecord) -> dict[str, str]:

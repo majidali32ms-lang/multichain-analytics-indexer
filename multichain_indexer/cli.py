@@ -163,8 +163,8 @@ def index_asset(indexer: Indexer, asa_id: str) -> None:
 @click.pass_obj
 @_with_indexer
 def index_token(indexer: Indexer, mint: str) -> None:
-    """Show a Solana SPL Token or Token-2022 mint."""
-    _require_chain(indexer, "solana", "index token")
+    """Show a Solana SPL Token or Token-2022 mint, or an EVM chain's ERC-20 or BEP-20 token."""
+    _require_chain(indexer, ("solana", *EVM_CHAINS), "index token")
     _echo_fields(indexer.describe(indexer.asset(mint)))
 
 

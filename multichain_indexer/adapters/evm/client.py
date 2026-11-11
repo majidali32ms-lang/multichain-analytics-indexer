@@ -22,6 +22,9 @@ from multichain_indexer.core.http import ApiClient, JsonObject
 RPC_PATH = "/"
 
 INVALID_PARAMS = -32602
+# eth_call reports a revert as error 3, with the revert data; some nodes use -32000.
+EXECUTION_REVERTED = 3
+SERVER_ERROR = -32000
 RATE_LIMITED = 429
 
 
@@ -51,6 +54,15 @@ class EvmRpc:
 
     async def code(self, address: str, block: int) -> bytes:
         return parse_data(await self._call("eth_getCode", [address, hex(block)]), "eth_getCode")
+
+    async def call(self, to: str, data: bytes, block: int) -> bytes | None:
+        """Run a read-only call; None when the contract reverts or has no such function."""
+        params: list[JsonValue] = [{"to": to, "data": "0x" + data.hex()}, hex(block)]
+        try:
+            result = await self._call("eth_call", params)
+        except _Reverted:
+            return None
+        return parse_data(result, "eth_call")
 
     async def finalized_block_number(self) -> int:
         block = await self._block("finalized", full=False)
@@ -103,11 +115,24 @@ class EvmRpc:
         return reply["result"]
 
 
+class _Reverted(Exception):
+    """An eth_call that reverted; ``call`` turns it into None."""
+
+
 def _error_for(method: str, error: JsonValue) -> Exception:
     code = error.get("code") if isinstance(error, dict) else None
-    message = f"{method}: {error.get('message') if isinstance(error, dict) else error}"
+    detail = error.get("message") if isinstance(error, dict) else error
+    message = f"{method}: {detail}"
+    if method == "eth_call" and _is_revert(code, detail):
+        return _Reverted(message)
     if code == INVALID_PARAMS:
         return InvalidInput(message)
     if code == RATE_LIMITED:
         return RateLimited(f"{message}. Lower MCI_REQUESTS_PER_SECOND or use a dedicated endpoint.")
     return NetworkError(message)
+
+
+def _is_revert(code: JsonValue, detail: JsonValue) -> bool:
+    if code == EXECUTION_REVERTED:
+        return True
+    return code == SERVER_ERROR and "revert" in str(detail).lower()

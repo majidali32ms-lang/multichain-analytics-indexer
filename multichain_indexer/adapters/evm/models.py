@@ -29,6 +29,16 @@ class EvmContract(NativeData):
     block_number: int = Field(ge=0)
 
 
+class EvmToken(NativeData):
+    """A fungible token contract, read at ``block_number``. ``standard`` is the chain's name
+    for it, ERC-20 or BEP-20; ``decimals_declared`` is false when the contract has no
+    ``decimals()``, and its amounts are then whole units."""
+
+    standard: str
+    decimals_declared: bool
+    block_number: int = Field(ge=0)
+
+
 class EvmTokenTransfer(NativeData):
     """A ``Transfer`` event of a token contract, from the transaction's logs.
 
