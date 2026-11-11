@@ -1,8 +1,9 @@
 """What makes each EVM chain different. A new EVM chain is one more profile here.
 
 Chain IDs and public endpoints are from each chain's own developer docs. Ethereum's docs list
-no public endpoint, so its defaults are a public provider's; every default answered
-``eth_chainId`` with its documented chain ID when checked.
+no public endpoint, so its defaults are public providers': publicnode for mainnet, Tenderly's
+gateway for Sepolia. Every default answered ``eth_chainId`` with its documented chain ID when
+checked.
 """
 
 from __future__ import annotations
@@ -59,7 +60,10 @@ ETHEREUM = EvmChain(
     token_standard="ERC-20",
     networks={
         MAINNET: EvmNetwork("Ethereum mainnet", 1, "https://ethereum-rpc.publicnode.com"),
-        TESTNET: EvmNetwork("Sepolia", 11155111, "https://ethereum-sepolia-rpc.publicnode.com"),
+        # publicnode's Sepolia endpoint returned no receipt for transactions two days old on
+        # 2026-11-11, and the endpoints the Sepolia repository lists did not answer; Tenderly's
+        # public gateway returned them and took 30 requests at 10 a second without refusing.
+        TESTNET: EvmNetwork("Sepolia", 11155111, "https://sepolia.gateway.tenderly.co"),
     },
 )
 
@@ -111,7 +115,10 @@ POLYGON = EvmChain(
         # Blockscout's free plan dropped Polygon on 2026-10-01 and lists no Amoy explorer;
         # Etherscan's free plan answers on both, as checked on 2026-11-11.
         MAINNET: EvmNetwork("Polygon PoS mainnet", 137, "https://polygon.drpc.org", ETHERSCAN),
-        TESTNET: EvmNetwork("Amoy", 80002, "https://polygon-amoy.drpc.org", ETHERSCAN),
+        # The docs' Amoy endpoint, dRPC, failed 29 of 30 requests on 2026-11-11. Tenderly, which
+        # the docs list as a provider, took all 30 and returned an Amoy receipt from block
+        # 3127297; publicnode's Amoy endpoint did not.
+        TESTNET: EvmNetwork("Amoy", 80002, "https://polygon-amoy.gateway.tenderly.co", ETHERSCAN),
     },
 )
 
