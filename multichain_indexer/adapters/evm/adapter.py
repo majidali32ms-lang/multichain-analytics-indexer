@@ -25,6 +25,7 @@ from multichain_indexer.adapters.evm.history import (
     HistorySourceFactory,
     SourceContext,
 )
+from multichain_indexer.adapters.evm.metrics import evm_metrics
 from multichain_indexer.adapters.evm.models import EvmAccount, EvmContract, EvmTransaction
 from multichain_indexer.adapters.evm.nodereal import create_nodereal_history
 from multichain_indexer.adapters.evm.parser import (
@@ -192,7 +193,11 @@ class EvmIndexer(BaseIndexer):
             next_cursor = page.next_cursor
 
     def chain_metrics(self, records: Sequence[TransactionRecord]) -> dict[str, JsonValue]:
-        return {}
+        return evm_metrics(
+            records,
+            native_symbol=self.chain.native_symbol,
+            token_standard=self.chain.token_standard,
+        )
 
     def describe(
         self, record: TransactionRecord | AccountRecord | AssetRecord | ContractRecord

@@ -390,7 +390,7 @@ async def test_chain_id_check_that_could_not_run_is_tried_again(
 async def test_token_lookups_are_not_built_yet(base: EvmIndexer) -> None:
     with pytest.raises(UnsupportedChain, match="ERC-20 token lookups are not available yet"):
         await base.fetch_asset(WETH_ADDRESS)
-    assert base.chain_metrics([]) == {}
+    assert base.chain_metrics([])["fees_eth"] == "0"
 
 
 @pytest.mark.parametrize(
