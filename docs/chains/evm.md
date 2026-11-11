@@ -118,8 +118,27 @@ behind on Ethereum, and NodeReal refuses a range that ends past its newest index
 sync never moves its checkpoint past the finalized block, nor past the block NodeReal
 reached, so what a service has not indexed yet is listed by the next sync.
 
-History holds the transactions an address sent or received. A token transfer to the address
-inside someone else's contract call is not included yet.
+### Scope
+
+`<CHAIN>_<NETWORK>_HISTORY_SCOPE` chooses which transactions are history:
+
+| Scope | Keeps | Sources |
+|---|---|---|
+| `direct` (default) | transactions the address sent or received (`txlist`) | all |
+| `all` | also ERC-20 (BEP-20) transfers to or from the address inside someone else's call (`tokentx` with the same block range) | Blockscout, Etherscan, NodeReal (category `20`) |
+
+An example: on Arbitrum Sepolia, transaction
+`0x67398b1eef1d67328d1f558e7d5131ec08f3cd9b8d909a38c281ec287a2f0e08` was sent by `0x523d…4612`
+to contract `0xa146…0fd4`, which moved tokens to and from `0xc4a2…8776`. The `txlist` of
+`0xc4a2…8776` does not list it; its `tokentx` does, three rows for one transaction.
+
+With `all`, the explorers are asked twice per page (`txlist` and `tokentx`), so Blockscout
+uses 40 credits a page instead of 20 and Etherscan two of its daily calls; NodeReal makes the
+same calls with one more category. Each added transaction costs three RPC reads. The two lists
+are read newest first, and a page stops at the highest block where a full list stopped, so
+neither list gets ahead of the other; a transaction split across two pages is read once. The
+block scan (`rpc-scan`) lists direct transactions only. Sync into a new database after
+changing the scope.
 
 ## Metrics
 

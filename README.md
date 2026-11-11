@@ -460,11 +460,31 @@ terms apply to your key, not this project's:
 - **NodeReal** ([terms](https://nodereal.io/terms)): no clause on attribution, caching or
   redistribution was found. The key sits in the endpoint URL; this project keeps it out of
   messages and logs, but treat any URL you copy from your dashboard as a secret.
+- **Alchemy** ([terms](https://legal.alchemy.com/), version 2.0 of 27 June 2025), planned for
+  Base history: use is "solely for your internal business purposes" (2.1); you may not resell,
+  mirror or let others use the service (2.2(v)), scrape it or use crawlers (2.2(viii), (xi)),
+  or spread use across accounts to get past limits (2.2(x)); the free tier is "as is" and can
+  end at any time (2.11); on termination, Alchemy's confidential information must be destroyed
+  (11.6), which may include data you stored from it. No attribution or caching clause was
+  found. Each user's own key, fetching history for that user into a local database, appears
+  to fit these terms; read them yourself before relying on that.
 
 A history service is a third party: it can be behind the chain, list a transaction the RPC
 does not have yet, or change its limits. A listed transaction the RPC does not have is left
-out and fetched on a later sync. History holds the transactions an address sent or received;
-a token transfer to the address inside someone else's contract call is not included yet.
+out and fetched on a later sync.
+
+### Which transactions count
+
+`<CHAIN>_<NETWORK>_HISTORY_SCOPE` chooses them:
+
+| Scope | Keeps | Extra cost per history page |
+|---|---|---|
+| `direct` (default) | transactions the address sent or received | none |
+| `all` | also those that moved an ERC-20 (BEP-20) token to or from the address inside someone else's contract call | Blockscout and Etherscan: a second call, `tokentx`, so twice the calls (Blockscout charges 20 credits each, 40 a page); NodeReal: none, the same calls ask for BEP-20 transfers too (250 compute units each) |
+
+Every extra transaction also costs three RPC reads (transaction, receipt, block). The block
+scan used on `localnet` lists direct transactions only. NFT transfers inside other calls are
+not added. Sync into a new database after changing the scope: stored records stay as they are.
 
 ## Post-quantum signatures
 
