@@ -193,8 +193,11 @@ class EvmIndexer(BaseIndexer):
         return await self._rpc.block_number()
 
     def final_height(self, head: int) -> int:
-        # Blocks up to the endpoint's "finalized" block can no longer be replaced.
-        return min(head, self._finalized_height)
+        # Blocks up to the endpoint's "finalized" block can no longer be replaced, and a
+        # checkpoint must not pass what the history service has indexed: transactions above
+        # it would never be listed.
+        indexed = self._history.indexed_up_to if self._history else None
+        return min(head, self._finalized_height, head if indexed is None else indexed)
 
     async def iter_account_transactions(
         self,

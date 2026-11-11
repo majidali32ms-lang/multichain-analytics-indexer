@@ -253,3 +253,58 @@ def test_other_networks_are_refused(chain: Any, network: str) -> None:
 
 def test_key_is_masked_in_logs() -> None:
     assert KEY in Settings(env={"NODEREAL_API_KEY": SecretStr(KEY)}).secret_values()
+
+
+def lagging(indexed: int) -> Callable[[list[dict[str, Any]]], Reply]:
+    def handle(params: list[dict[str, Any]]) -> Reply:
+        if int(params[0]["toBlock"], 16) > indexed:
+            return rpc_error(-32000, "blockNum not reached")
+        return rpc_ok({"transfers": [], "pageKey": ""})
+
+    return handle
+
+
+async def test_top_is_lowered_until_nodereal_has_indexed_it(node: FakeNode, tmp_path: Path) -> None:
+    node.handlers[METHOD] = lagging(TOP - 250)
+    history = source_for(settings_for(node, tmp_path))
+    try:
+        assert history.indexed_up_to is None
+        page = await history.account_page(
+            ADDRESS, from_height=TOP - 1000, to_height=TOP, cursor=None
+        )
+    finally:
+        await history.aclose()
+    assert page.next_cursor is None
+    assert history.indexed_up_to == TOP - 300
+
+
+async def test_a_service_that_never_catches_up_is_reported(node: FakeNode, tmp_path: Path) -> None:
+    node.handlers[METHOD] = lagging(0)
+    history = source_for(settings_for(node, tmp_path))
+    try:
+        with pytest.raises(NetworkError, match="has not indexed the newest blocks yet"):
+            await history.account_page(ADDRESS, from_height=None, to_height=TOP, cursor=None)
+    finally:
+        await history.aclose()
+
+
+async def test_checkpoint_never_passes_what_nodereal_indexed(
+    node: FakeNode, tmp_path: Path
+) -> None:
+    node.handlers[METHOD] = lagging(TOP - 250)
+    node.routes["rpc:eth_chainId"] = rpc_ok(hex(56))
+    node.routes["rpc:eth_blockNumber"] = rpc_ok(hex(TOP))
+    node.routes["rpc:eth_getBlockByNumber"] = rpc_ok({"number": hex(TOP - 2)})
+    adapter = indexer_factory(BNB)("mainnet", settings_for(node, tmp_path), None)
+    try:
+        head = await adapter.chain_head()
+        pages = [
+            page
+            async for page in adapter.iter_account_transactions(
+                ADDRESS, from_height=TOP - 1000, to_height=head
+            )
+        ]
+        assert pages == []
+        assert adapter.final_height(head) == TOP - 300
+    finally:
+        await adapter.aclose()

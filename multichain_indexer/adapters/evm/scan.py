@@ -24,6 +24,10 @@ class RpcScanHistory:
         # The adapter counts the RPC it shares with this source.
         return 0
 
+    @property
+    def indexed_up_to(self) -> int | None:
+        return None
+
     async def account_page(
         self,
         address: str,

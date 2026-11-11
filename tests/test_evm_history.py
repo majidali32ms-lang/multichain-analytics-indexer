@@ -515,6 +515,7 @@ async def test_local_network_history_through_the_adapter(node: FakeNode, tmp_pat
     adapter = adapter_for(local_settings(node, tmp_path), ETHEREUM, "localnet")
     try:
         pages = [page async for page in adapter.iter_account_transactions(ACCOUNT)]
+        assert adapter.final_height(8) == 8
     finally:
         await adapter.aclose()
     assert [record.id for page in pages for record in page.records] == [NATIVE_HASH]

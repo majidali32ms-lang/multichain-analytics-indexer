@@ -30,6 +30,15 @@ class HistorySource(Protocol):
     @property
     def requests_made(self) -> int: ...
 
+    @property
+    def indexed_up_to(self) -> int | None:
+        """The newest block the service had indexed when it could not reach the top asked for.
+
+        None when it listed up to the top. A sync never moves its checkpoint past this block,
+        so transactions above it are listed by the next sync.
+        """
+        ...
+
     async def account_page(
         self,
         address: str,

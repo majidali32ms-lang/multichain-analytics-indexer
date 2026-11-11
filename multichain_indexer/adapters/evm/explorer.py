@@ -111,6 +111,10 @@ class ExplorerHistory:
     def requests_made(self) -> int:
         return self._client.requests_made
 
+    @property
+    def indexed_up_to(self) -> int | None:
+        return None
+
     async def account_page(
         self,
         address: str,

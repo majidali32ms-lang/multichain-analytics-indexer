@@ -42,6 +42,12 @@ DIRECTIONS = ("fromAddress", "toAddress")
 REQUESTS_PER_SECOND = 0.5
 OUT_OF_COMPUTE_UNITS = -32005
 METHOD_NOT_AVAILABLE = -32601
+# NodeReal indexes a few blocks behind the chain and refuses a range that ends past what it
+# has indexed; the top is lowered by this many blocks (about 45 seconds on BSC) until it is
+# accepted, at most MAX_LOWERINGS times.
+NOT_REACHED = "blockNum not reached"
+LOWER_BY_BLOCKS = 100
+MAX_LOWERINGS = 10
 
 
 @dataclass(frozen=True)
@@ -54,10 +60,15 @@ class NodeRealHistory:
     def __init__(self, client: ApiClient, rpc: EvmRpc) -> None:
         self._client = client
         self._rpc = rpc
+        self._indexed_up_to: int | None = None
 
     @property
     def requests_made(self) -> int:
         return self._client.requests_made
+
+    @property
+    def indexed_up_to(self) -> int | None:
+        return self._indexed_up_to
 
     async def account_page(
         self,
@@ -71,12 +82,20 @@ class NodeRealHistory:
         top = _parse_cursor(cursor) if cursor else to_height
         if top is None:
             top = await self._rpc.block_number()
-        bottom = max(lowest, top - WINDOW_BLOCKS + 1)
-        transfers = [
-            transfer
-            for direction in DIRECTIONS
-            for transfer in await self._window(address, direction, bottom, top)
-        ]
+        for _ in range(MAX_LOWERINGS):
+            bottom = max(lowest, top - WINDOW_BLOCKS + 1)
+            try:
+                transfers = [
+                    transfer
+                    for direction in DIRECTIONS
+                    for transfer in await self._window(address, direction, bottom, top)
+                ]
+                break
+            except _NotReached:
+                top = max(lowest, top - LOWER_BY_BLOCKS)
+                self._indexed_up_to = top
+        else:
+            raise NetworkError(f"{METHOD}: NodeReal has not indexed the newest blocks yet")
         return HistoryPage(
             hashes=_newest_first(transfers),
             next_cursor=str(bottom - 1) if bottom > lowest else None,
@@ -182,9 +201,16 @@ def _newest_first(transfers: list[_Transfer]) -> tuple[str, ...]:
     return tuple(transfer.hash for transfer in ordered)
 
 
+class _NotReached(Exception):
+    """The range ends past the newest block NodeReal has indexed."""
+
+
 def _error_for(error: JsonValue) -> Exception:
     code = error.get("code") if isinstance(error, dict) else None
-    message = f"{METHOD}: {error.get('message') if isinstance(error, dict) else error}"
+    detail = error.get("message") if isinstance(error, dict) else error
+    message = f"{METHOD}: {detail}"
+    if NOT_REACHED in str(detail):
+        return _NotReached(message)
     if code == OUT_OF_COMPUTE_UNITS:
         return RateLimited(f"{message}. The key's compute units may be used up for the month.")
     if code == METHOD_NOT_AVAILABLE:
