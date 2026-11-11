@@ -3,7 +3,8 @@
 The method lists transfers in a block range, filtered by sender or by receiver; asking for
 both means both at once, so an address's sent and received transactions are two queries. The
 ``external`` category holds the address's own transactions, the same set as an explorer's
-``txlist``. NodeReal serves it on BSC mainnet only, not on BSC testnet.
+``txlist``; the ``all`` scope adds category ``20``, BEP-20 transfers, in the same calls.
+NodeReal serves it on BSC mainnet only, not on BSC testnet.
 
 The range must be shorter than 2,000,000 blocks, as measured on 2026-11-11 (the docs say
 100,000, which is not enforced). Pages walk down one window of blocks at a time, so a cursor
@@ -19,7 +20,12 @@ from pydantic import JsonValue, SecretStr
 
 from multichain_indexer.adapters.evm.client import EvmRpc
 from multichain_indexer.adapters.evm.encoding import parse_quantity
-from multichain_indexer.adapters.evm.history import HistoryPage, HistorySource, SourceContext
+from multichain_indexer.adapters.evm.history import (
+    SCOPE_ALL,
+    HistoryPage,
+    HistorySource,
+    SourceContext,
+)
 from multichain_indexer.core.errors import (
     ConfigError,
     InvalidInput,
@@ -37,6 +43,8 @@ METHOD = "nr_getAssetTransfers"
 WINDOW_BLOCKS = 1_000_000
 MAX_COUNT = 1000
 DIRECTIONS = ("fromAddress", "toAddress")
+EXTERNAL = "external"
+BEP20 = "20"
 # The free plan allows 150 compute units a second per key and this method costs 250, so
 # about one call every 1.7 seconds; slower still leaves room for retries.
 REQUESTS_PER_SECOND = 0.5
@@ -57,9 +65,12 @@ class _Transfer:
 
 
 class NodeRealHistory:
-    def __init__(self, client: ApiClient, rpc: EvmRpc) -> None:
+    def __init__(
+        self, client: ApiClient, rpc: EvmRpc, categories: tuple[str, ...] = (EXTERNAL,)
+    ) -> None:
         self._client = client
         self._rpc = rpc
+        self._categories = categories
         self._indexed_up_to: int | None = None
 
     @property
@@ -109,7 +120,7 @@ class NodeRealHistory:
         page_key: str | None = None
         while True:
             params: JsonObject = {
-                "category": ["external"],
+                "category": list(self._categories),
                 "fromBlock": hex(bottom),
                 "toBlock": hex(top),
                 "order": "desc",
@@ -161,7 +172,8 @@ def create_nodereal_history(context: SourceContext) -> HistorySource:
         max_retries=context.settings.max_retries,
         limiter=RateLimiter(REQUESTS_PER_SECOND),
     )
-    return NodeRealHistory(client, context.rpc)
+    categories = (EXTERNAL, BEP20) if context.scope == SCOPE_ALL else (EXTERNAL,)
+    return NodeRealHistory(client, context.rpc, categories)
 
 
 def _parse_cursor(cursor: str) -> int:

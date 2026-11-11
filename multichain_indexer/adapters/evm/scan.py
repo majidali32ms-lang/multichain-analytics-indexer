@@ -8,8 +8,13 @@ A cursor is the number of the next block to read, walking down.
 from __future__ import annotations
 
 from multichain_indexer.adapters.evm.client import EvmRpc
-from multichain_indexer.adapters.evm.history import HistoryPage, HistorySource, SourceContext
-from multichain_indexer.core.errors import InvalidInput, MalformedResponse
+from multichain_indexer.adapters.evm.history import (
+    SCOPE_ALL,
+    HistoryPage,
+    HistorySource,
+    SourceContext,
+)
+from multichain_indexer.core.errors import ConfigError, InvalidInput, MalformedResponse
 from multichain_indexer.core.http import JsonObject
 
 BLOCKS_PER_PAGE = 25
@@ -50,6 +55,14 @@ class RpcScanHistory:
 
 
 def create_rpc_scan_history(context: SourceContext) -> HistorySource:
+    """Build the block scan; it lists only the transactions an account sent or received.
+
+    Raises:
+        ConfigError: The ``all`` scope was asked for.
+    """
+    if context.scope == SCOPE_ALL:
+        setting = f"{context.chain.name}_{context.network}_HISTORY_SCOPE".upper()
+        raise ConfigError(f"rpc-scan lists direct transactions only; set {setting} to direct")
     return RpcScanHistory(context.rpc)
 
 

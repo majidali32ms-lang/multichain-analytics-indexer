@@ -21,6 +21,8 @@ from multichain_indexer.adapters.evm.explorer import (
     create_etherscan_history,
 )
 from multichain_indexer.adapters.evm.history import (
+    HISTORY_SCOPES,
+    SCOPE_DIRECT,
     HistorySource,
     HistorySourceFactory,
     SourceContext,
@@ -213,14 +215,19 @@ class EvmIndexer(BaseIndexer):
         history = self._history_source()
         await self._refresh_finalized_height()
         next_cursor = cursor
+        # A transaction with several token transfers can be listed on two pages of the "all"
+        # scope; it is read once.
+        listed: set[str] = set()
         while True:
             page = await history.account_page(
                 account, from_height=from_height, to_height=to_height, cursor=next_cursor
             )
+            new = [tx_hash for tx_hash in page.hashes if tx_hash not in listed]
+            listed.update(new)
             found = tuple(
                 [
                     record
-                    for tx_hash in page.hashes
+                    for tx_hash in new
                     if (record := await self._listed_record(tx_hash)) is not None
                 ]
             )
@@ -299,9 +306,20 @@ class EvmIndexer(BaseIndexer):
         factory = HISTORY_SOURCES.get(name)
         if factory is None:
             raise ConfigError(f"{setting} must be one of: {choices}")
-        source = factory(SourceContext(self.chain, self.network, self._settings, self._rpc))
+        context = SourceContext(
+            self.chain, self.network, self._settings, self._rpc, self._history_scope()
+        )
+        source = factory(context)
         self._history_name = name
         return source
+
+    def _history_scope(self) -> str:
+        configured = self._settings.chain_setting(self.chain.name, self.network, "HISTORY_SCOPE")
+        scope = configured.get_secret_value() if configured else SCOPE_DIRECT
+        if scope not in HISTORY_SCOPES:
+            setting = f"{self.chain.name}_{self.network}_HISTORY_SCOPE".upper()
+            raise ConfigError(f"{setting} must be one of: {', '.join(HISTORY_SCOPES)}")
+        return scope
 
     def _default_history_source(self) -> str | None:
         if self.network == LOCALNET:

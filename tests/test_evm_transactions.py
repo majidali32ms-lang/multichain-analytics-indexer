@@ -44,7 +44,7 @@ def wei(value: str) -> int:
 
 
 def test_every_fixture_comes_from_its_chains_testnet_or_mainnet() -> None:
-    assert len(ALL_FIXTURES) == 14
+    assert len(ALL_FIXTURES) == 15
     for name in ALL_FIXTURES:
         raw = fixture(name)
         assert raw["transaction"]["hash"] == raw["receipt"]["transactionHash"]

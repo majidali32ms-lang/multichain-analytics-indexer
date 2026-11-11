@@ -308,3 +308,20 @@ async def test_checkpoint_never_passes_what_nodereal_indexed(
         assert adapter.final_height(head) == TOP - 300
     finally:
         await adapter.aclose()
+
+
+async def test_all_scope_adds_bep20_transfers_to_the_same_calls(
+    node: FakeNode, tmp_path: Path
+) -> None:
+    node.handlers[METHOD] = replay(FIXTURE["exchanges"])
+    history = source_for(settings_for(node, tmp_path, BNB_MAINNET_HISTORY_SCOPE="all"))
+    try:
+        await history.account_page(ADDRESS, from_height=None, to_height=TOP, cursor=None)
+    finally:
+        await history.aclose()
+    categories = {
+        tuple(params[0]["category"])
+        for method, params in node.rpc_calls
+        if method == "nr_getAssetTransfers"
+    }
+    assert categories == {("external", "20")}

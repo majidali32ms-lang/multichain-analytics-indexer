@@ -17,6 +17,13 @@ from multichain_indexer.adapters.evm.client import EvmRpc
 from multichain_indexer.adapters.evm.profiles import EvmChain
 from multichain_indexer.core.config import Settings
 
+# Which transactions are an account's history, chosen with <CHAIN>_<NETWORK>_HISTORY_SCOPE.
+# "direct": those it sent or received. "all": also those that moved a token to or from it
+# inside another account's call.
+SCOPE_DIRECT = "direct"
+SCOPE_ALL = "all"
+HISTORY_SCOPES = (SCOPE_DIRECT, SCOPE_ALL)
+
 
 @dataclass(frozen=True)
 class HistoryPage:
@@ -65,6 +72,7 @@ class SourceContext:
     network: str
     settings: Settings
     rpc: EvmRpc
+    scope: str = SCOPE_DIRECT
 
 
 HistorySourceFactory = Callable[[SourceContext], HistorySource]

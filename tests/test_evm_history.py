@@ -26,7 +26,14 @@ from multichain_indexer.adapters.evm import explorer as explorer_module
 from multichain_indexer.adapters.evm import scan as scan_module
 from multichain_indexer.adapters.evm.adapter import indexer_factory
 from multichain_indexer.adapters.evm.explorer import BLOCKSCOUT, ETHERSCAN, ExplorerHistory
-from multichain_indexer.adapters.evm.profiles import BASE, BNB, ETHEREUM, POLYGON, EvmChain
+from multichain_indexer.adapters.evm.profiles import (
+    ARBITRUM,
+    BASE,
+    BNB,
+    ETHEREUM,
+    POLYGON,
+    EvmChain,
+)
 from multichain_indexer.adapters.evm.transactions import RawTransaction, parse_transaction
 from multichain_indexer.cli import cli
 from multichain_indexer.core.config import Settings
@@ -824,3 +831,136 @@ async def test_only_a_proven_reorg_orphans_a_record(
 ) -> None:
     status, _ = await pending_then_rechecked(node, tmp_path, change)
     assert status is expected
+
+
+INNER = json.loads((FIXTURES / "history_arbitrum_sepolia_inner_token.json").read_text("utf-8"))
+INNER_TX = json.loads((FIXTURES / "tx_arbitrum_sepolia_inner_token.json").read_text("utf-8"))
+INNER_HASH = INNER_TX["transaction"]["hash"]
+ARBITRUM_SEPOLIA = 421614
+
+
+def explorer_by_action(rows: dict[str, list[dict[str, Any]]]) -> Callable[[dict[str, str]], Reply]:
+    servers = {action: explorer_server(listed) for action, listed in rows.items()}
+    return lambda query: servers[query["action"]](query)
+
+
+def serve_inner(node: FakeNode) -> None:
+    def block(params: list[Any]) -> Reply:
+        if params[0] == "finalized":
+            return rpc_ok({"number": hex(INNER["block"] + 10)})
+        return rpc_ok(INNER_TX["block"])
+
+    node.routes["rpc:eth_chainId"] = rpc_ok(hex(ARBITRUM_SEPOLIA))
+    node.routes["rpc:eth_blockNumber"] = rpc_ok(hex(INNER["block"] + 20))
+    node.routes["rpc:eth_getTransactionByHash"] = rpc_ok(INNER_TX["transaction"])
+    node.routes["rpc:eth_getTransactionReceipt"] = rpc_ok(INNER_TX["receipt"])
+    node.handlers["rpc:eth_getBlockByNumber"] = block
+    node.handlers[EXPLORER_PATH] = explorer_by_action(
+        {action: reply["result"] or [] for action, reply in INNER["replies"].items()}
+    )
+
+
+def test_saved_example_is_a_transfer_inside_someone_elses_call() -> None:
+    assert INNER["replies"]["txlist"]["result"] == []
+    rows = INNER["replies"]["tokentx"]["result"]
+    assert {row["hash"] for row in rows} == {INNER_HASH}
+    parties = {INNER_TX["transaction"]["from"], INNER_TX["transaction"]["to"]}
+    assert INNER["address"] not in parties
+
+
+@pytest.mark.parametrize(("scope", "expected"), [("direct", []), ("all", [INNER_HASH])])
+async def test_all_scope_adds_token_transfers_inside_other_calls(
+    node: FakeNode, tmp_path: Path, scope: str, expected: list[str]
+) -> None:
+    serve_inner(node)
+    settings = explorer_settings(node, tmp_path, ARBITRUM, ARBITRUM_TESTNET_HISTORY_SCOPE=scope)
+    adapter = adapter_for(settings, ARBITRUM)
+    try:
+        pages = [page async for page in adapter.iter_account_transactions(INNER["address"])]
+    finally:
+        await adapter.aclose()
+    records = [record for page in pages for record in page.records]
+    assert [record.id for record in records] == expected
+    actions = [query["action"] for query in node.requests_to(EXPLORER_PATH)]
+    assert actions == (["txlist"] if scope == "direct" else ["txlist", "tokentx"])
+    if records:
+        receivers = {transfer.receiver.lower() for transfer in records[0].native.token_transfers}
+        assert INNER["address"] in receivers
+
+
+def tokentx_rows() -> list[dict[str, Any]]:
+    # Token rows for the saved Sepolia account: one shares a transaction with txlist, the
+    # others sit in blocks between and below its transactions, two rows to a transaction.
+    rows = []
+    for index, row in enumerate(ROWS[::3]):
+        block = int(row["blockNumber"]) - (0 if index == 0 else 1)
+        tx_hash = row["hash"] if index == 0 else "0x" + f"{index:064x}"
+        rows += [{"hash": tx_hash, "blockNumber": str(block)}] * 2
+    return rows
+
+
+@pytest.mark.parametrize("page_size", [1, 2, 3, 5, 100])
+async def test_two_lists_are_walked_together_without_repeats_or_gaps(
+    node: FakeNode, monkeypatch: pytest.MonkeyPatch, page_size: int
+) -> None:
+    monkeypatch.setattr(explorer_module, "PAGE_SIZE", page_size)
+    tokens = tokentx_rows()
+    node.handlers[EXPLORER_PATH] = explorer_by_action({"txlist": ROWS, "tokentx": tokens})
+    client = ApiClient(SecretStr(node.url), max_retries=0)
+    source = ExplorerHistory(
+        BLOCKSCOUT, SEPOLIA, client, SecretStr(BLOCKSCOUT_KEY), ("txlist", "tokentx")
+    )
+    try:
+        hashes = await walk(source)
+    finally:
+        await source.aclose()
+    blocks = {row["hash"]: int(row["blockNumber"]) for row in [*tokens, *ROWS]}
+    # Rows of one transaction can straddle two pages; the adapter keeps the first.
+    unique = list(dict.fromkeys(hashes))
+    assert sorted(unique) == sorted(blocks)
+    assert [blocks[tx_hash] for tx_hash in unique] == sorted(
+        (blocks[tx_hash] for tx_hash in unique), reverse=True
+    )
+
+
+async def test_a_transaction_listed_on_two_pages_is_read_once(
+    node: FakeNode, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(explorer_module, "PAGE_SIZE", 1)
+    serve_inner(node)
+    settings = explorer_settings(node, tmp_path, ARBITRUM, ARBITRUM_TESTNET_HISTORY_SCOPE="all")
+    adapter = adapter_for(settings, ARBITRUM)
+    try:
+        pages = [page async for page in adapter.iter_account_transactions(INNER["address"])]
+    finally:
+        await adapter.aclose()
+    assert [record.id for page in pages for record in page.records] == [INNER_HASH]
+    assert node.rpc_params("eth_getTransactionReceipt") == [[INNER_HASH]]
+
+
+async def test_a_cursor_from_the_other_scope_is_refused(node: FakeNode) -> None:
+    client = ApiClient(SecretStr(node.url), max_retries=0)
+    source = ExplorerHistory(
+        BLOCKSCOUT, SEPOLIA, client, SecretStr(BLOCKSCOUT_KEY), ("txlist", "tokentx")
+    )
+    try:
+        with pytest.raises(InvalidInput, match="not a history cursor"):
+            await source.account_page(ACCOUNT, from_height=None, to_height=None, cursor="12:1")
+    finally:
+        await source.aclose()
+
+
+def test_unknown_scope_is_refused() -> None:
+    env = {"ETHEREUM_TESTNET_HISTORY_SCOPE": SecretStr("everything")}
+    adapter = indexer_factory(ETHEREUM)(None, Settings(env=env), None)
+    with pytest.raises(
+        ConfigError, match="ETHEREUM_TESTNET_HISTORY_SCOPE must be one of: direct, all"
+    ):
+        adapter._history_source()
+
+
+def test_block_scan_lists_direct_transactions_only() -> None:
+    env = {"ETHEREUM_LOCALNET_HISTORY_SCOPE": SecretStr("all")}
+    adapter = indexer_factory(ETHEREUM)("localnet", Settings(env=env), None)
+    with pytest.raises(ConfigError, match="rpc-scan lists direct transactions only"):
+        adapter._history_source()
