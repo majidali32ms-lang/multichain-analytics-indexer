@@ -719,3 +719,29 @@ def test_other_sources_print_no_attribution(
     assert shown.exit_code == 0, shown.output
     assert NATIVE_HASH in shown.stdout
     assert ATTRIBUTION not in shown.output
+
+
+async def test_receipt_from_a_replaced_block_is_left_for_the_next_sync(
+    node: FakeNode, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    rpc_server(node, finalized=NATIVE_BLOCK - 1)
+    replaced = {**NATIVE["block"], "hash": "0x" + "ee" * 32}
+    blocks = iter([replaced, NATIVE["block"]])
+
+    def block(params: list[Any]) -> Reply:
+        if params[0] == "finalized":
+            return rpc_ok({"number": hex(NATIVE_BLOCK - 1)})
+        return rpc_ok(next(blocks))
+
+    node.handlers["rpc:eth_getBlockByNumber"] = block
+    node.handlers[EXPLORER_PATH] = explorer_server(ROWS[:1])
+    settings = explorer_settings(node, tmp_path)
+    with Indexer("ethereum", settings=settings) as indexer:
+        with caplog.at_level(logging.WARNING):
+            first = indexer.sync(ACCOUNT)
+        second = indexer.sync(ACCOUNT)
+        stored = indexer.stored_transactions(account=first.account)
+    assert "replaced block" in caplog.text
+    assert first.records_fetched == 0
+    assert second.records_fetched == 1
+    assert [record.status for record in stored] == [Status.PENDING]

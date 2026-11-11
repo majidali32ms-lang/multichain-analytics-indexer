@@ -259,6 +259,9 @@ class EvmIndexer(BaseIndexer):
         block_number = _block_number(receipt)
         final = block_number <= self._finalized_height
         block = await self._rpc.block_header(block_number, immutable=final)
+        if block.get("hash") != receipt.get("blockHash"):
+            _log_replaced(tx_hash, block_number)
+            return None
         return parse_transaction(
             RawTransaction(transaction, receipt, block),
             chain=self.chain.name,
@@ -339,6 +342,16 @@ class EvmIndexer(BaseIndexer):
             "Nonce": str(native.nonce),
             "As of block": str(native.block_number),
         }
+
+
+def _log_replaced(tx_hash: str, block_number: int) -> None:
+    # The receipt names a block that is no longer the chain's block at that height: a reorg
+    # replaced it. Such a block was never final, so the next sync looks the transaction up
+    # again and stores it wherever it landed.
+    logger.warning(
+        "receipt is from a replaced block",
+        extra={"transaction": tx_hash, "block": block_number},
+    )
 
 
 def _log_missing(tx_hash: str) -> None:
