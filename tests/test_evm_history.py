@@ -418,7 +418,6 @@ def test_explorers_do_not_serve_local_networks() -> None:
 @pytest.mark.parametrize(
     ("chain", "network", "title"),
     [
-        (BNB, "mainnet", "BNB Smart Chain mainnet"),
         (BNB, "testnet", "BNB Smart Chain testnet"),
         (BASE, "mainnet", "Base Mainnet"),
         (BASE, "testnet", "Base Sepolia"),

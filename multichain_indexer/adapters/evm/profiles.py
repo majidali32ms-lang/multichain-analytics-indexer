@@ -21,6 +21,7 @@ LOCALNET_TITLE = "a local network"
 # Names in the adapter's HISTORY_SOURCES.
 BLOCKSCOUT = "blockscout"
 ETHERSCAN = "etherscan"
+NODEREAL = "nodereal"
 RPC_SCAN = "rpc-scan"
 
 
@@ -122,8 +123,9 @@ BNB = EvmChain(
     token_standard="BEP-20",
     networks={
         # Blockscout has no BNB Smart Chain explorer, and Etherscan serves it on paid plans only.
+        # NodeReal's free plan lists transfers on mainnet; nothing free lists testnet history.
         MAINNET: EvmNetwork(
-            "BNB Smart Chain mainnet", 56, "https://bsc-dataseed.bnbchain.org", None
+            "BNB Smart Chain mainnet", 56, "https://bsc-dataseed.bnbchain.org", NODEREAL
         ),
         TESTNET: EvmNetwork(
             "BNB Smart Chain testnet", 97, "https://bsc-testnet-dataseed.bnbchain.org", None

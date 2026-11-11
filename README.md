@@ -350,17 +350,18 @@ fields such as `l1Fee` (OP Mainnet, Base), `gasUsedForL1` (Arbitrum) and blob ga
 | OP Mainnet | Blockscout | Blockscout (OP Sepolia) |
 | Polygon PoS | Etherscan | Etherscan (Amoy) |
 | Base | none yet | none yet |
-| BNB Smart Chain | none yet | none: transactions can be read by hash only |
+| BNB Smart Chain | NodeReal | none: NodeReal serves mainnet only, so transactions are read by hash |
 | any chain, `--network localnet` | reads every block over the RPC (Anvil) | |
 
-`<CHAIN>_<NETWORK>_HISTORY_SOURCE` switches the service (`blockscout`, `etherscan` or
-`rpc-scan`) without a code change. Account and contract lookups need no key; history needs
+`<CHAIN>_<NETWORK>_HISTORY_SOURCE` switches the service (`blockscout`, `etherscan`,
+`nodereal` or `rpc-scan`) without a code change. Account and contract lookups need no key; history needs
 the chosen service's free key:
 
 | Setting | Where to get it | Free plan, as its provider states it |
 |---|---|---|
 | `BLOCKSCOUT_API_KEY` | dev.blockscout.com, no card needed | 5 requests a second and 100,000 credits a day (a history page costs 20, so about 5,000 pages); requests fail once the day's credits are used. Base, Polygon and zkSync left the free plan on 1 October 2026. |
 | `ETHERSCAN_API_KEY` | etherscan.io | 3 requests a second, 100,000 a day, at most 1,000 records a request since 1 July 2026. Selected chains only. |
+| `NODEREAL_API_KEY` | dashboard.nodereal.io, no card asked on sign-up | 10 million compute units a month and 150 a second per key. `nr_getAssetTransfers` costs 250, so about 40,000 calls a month; this project sends one every 2 seconds. Each call covers at most 1,000,000 blocks (the service refuses 2,000,000 or more), and sent and received transactions are separate calls, so a first sync of a long history takes many calls. |
 
 What each free plan answered on 11 November 2026, with one request per network:
 
@@ -389,6 +390,9 @@ terms apply to your key, not this project's:
 - **Blockscout** ([terms](https://eaas.blockscout.com/terms-and-conditions)): no
   API-specific clause on attribution or storing results was found. The licence is revocable,
   and access or limits can change without notice.
+- **NodeReal** ([terms](https://nodereal.io/terms)): no clause on attribution, caching or
+  redistribution was found. The key sits in the endpoint URL; this project keeps it out of
+  messages and logs, but treat any URL you copy from your dashboard as a secret.
 
 A history service is a third party: it can be behind the chain, list a transaction the RPC
 does not have yet, or change its limits. A listed transaction the RPC does not have is left

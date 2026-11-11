@@ -26,6 +26,7 @@ from multichain_indexer.adapters.evm.history import (
     SourceContext,
 )
 from multichain_indexer.adapters.evm.models import EvmAccount, EvmContract, EvmTransaction
+from multichain_indexer.adapters.evm.nodereal import create_nodereal_history
 from multichain_indexer.adapters.evm.parser import (
     is_contract_code,
     parse_account,
@@ -70,6 +71,7 @@ HEX_CHARACTERS = frozenset("0123456789abcdefABCDEF")
 HISTORY_SOURCES: dict[str, HistorySourceFactory] = {
     "blockscout": create_blockscout_history,
     "etherscan": create_etherscan_history,
+    "nodereal": create_nodereal_history,
     RPC_SCAN: create_rpc_scan_history,
 }
 
