@@ -130,3 +130,31 @@ def test_example_notebook_runs() -> None:
     require_key("BLOCKSCOUT_API_KEY")
     notebook = nbformat.read(EXAMPLES / "account_analysis.ipynb", as_version=4)
     NotebookClient(notebook, timeout=300, kernel_name="python3").execute()
+
+
+# On Arbitrum Sepolia, this transaction moved tokens to INNER_RECEIVER inside another account's
+# call: the "all" scope lists it for INNER_RECEIVER, "direct" does not.
+INNER_TX = "0x67398b1eef1d67328d1f558e7d5131ec08f3cd9b8d909a38c281ec287a2f0e08"
+INNER_RECEIVER = "0xc4a2695fc61c77b0a2cdf85a2348d3fbd6a58776"
+INNER_BLOCK = 328259024
+
+
+@pytest.mark.parametrize(("scope", "listed"), [("direct", False), ("all", True)])
+async def test_all_scope_lists_a_token_transfer_inside_another_call(
+    scope: str, listed: bool
+) -> None:
+    require_key("BLOCKSCOUT_API_KEY")
+    settings = Settings.from_env()
+    env = {**settings.env, "ARBITRUM_TESTNET_HISTORY_SCOPE": SecretStr(scope)}
+    adapter = create_indexer("arbitrum", None, settings.model_copy(update={"env": env}))
+    try:
+        hashes = [
+            record.id
+            async for page in adapter.iter_account_transactions(
+                INNER_RECEIVER, from_height=INNER_BLOCK, to_height=INNER_BLOCK
+            )
+            for record in page.records
+        ]
+    finally:
+        await adapter.aclose()
+    assert (INNER_TX in hashes) is listed
