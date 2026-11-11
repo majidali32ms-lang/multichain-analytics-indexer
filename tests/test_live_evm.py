@@ -1,15 +1,20 @@
 """Smoke tests against the six EVM testnets. Run with ``pytest -m live --no-cov``.
 
-History tests need the services' free keys in the environment (``BLOCKSCOUT_API_KEY``,
-``ETHERSCAN_API_KEY``); without one they are skipped and say which key is missing.
+History tests need the services' free keys in the environment or in .env
+(``BLOCKSCOUT_API_KEY``, ``ETHERSCAN_API_KEY``, ``NODEREAL_API_KEY``); without one they are
+skipped and say which key is missing.
 """
 
 from __future__ import annotations
 
 import asyncio
-import os
+import runpy
+import sys
+from pathlib import Path
 
+import nbformat
 import pytest
+from nbclient import NotebookClient
 from pydantic import SecretStr
 
 from multichain_indexer import Indexer, WrongNetwork
@@ -24,10 +29,13 @@ pytestmark = pytest.mark.live
 OP_STACK_WETH = "0x4200000000000000000000000000000000000006"
 # A small Sepolia account: 20 transactions on 2026-11-09.
 SEPOLIA_ACCOUNT = "0xAA37651031A4b641962550415dB2C43E8d962232"
+# A small BNB Smart Chain mainnet sender, two transactions in its newest million blocks.
+BSC_ACCOUNT = "0x5664a59eee2ab649c218da75c47805935c4a20cb"
+EXAMPLES = Path(__file__).parent.parent / "examples" / "evm"
 
 
 def require_key(name: str) -> None:
-    if not os.environ.get(name):
+    if name not in Settings.from_env().env:
         pytest.skip(f"{name} is not set, so this history test is skipped")
 
 
@@ -55,7 +63,7 @@ def test_endpoint_of_another_chain_is_refused() -> None:
 
 def test_sepolia_history_from_blockscout() -> None:
     require_key("BLOCKSCOUT_API_KEY")
-    with Indexer("ethereum", settings=Settings.from_env(None)) as indexer:
+    with Indexer("ethereum", settings=Settings.from_env()) as indexer:
         records = indexer.account_transactions(SEPOLIA_ACCOUNT, limit=3)
     assert len(records) == 3
     assert all(SEPOLIA_ACCOUNT in (record.sender, record.receiver) for record in records)
@@ -82,3 +90,43 @@ async def _first_transaction_hash(adapter: EvmIndexer, start: int) -> str:
             return str(transactions[0]["hash"])
         await asyncio.sleep(0.5)
     pytest.fail("no transaction in 20 recent BNB Smart Chain testnet blocks")
+
+
+def test_sepolia_sync_stores_every_transaction_with_its_receipt(tmp_path: Path) -> None:
+    require_key("BLOCKSCOUT_API_KEY")
+    settings = Settings.from_env().model_copy(update={"database": tmp_path / "live.db"})
+    with Indexer("ethereum", settings=settings) as indexer:
+        first = indexer.sync(SEPOLIA_ACCOUNT)
+        stored = indexer.stored_transactions(account=first.account)
+    assert first.records_fetched >= 20
+    assert len(stored) == first.records_fetched
+
+
+def test_polygon_amoy_history_from_etherscan() -> None:
+    require_key("ETHERSCAN_API_KEY")
+    with Indexer("polygon", settings=Settings.from_env()) as indexer:
+        head = indexer.account_transactions(OP_STACK_WETH, limit=1)
+    assert all(record.native.history_source == "etherscan" for record in head)
+
+
+def test_bnb_mainnet_history_from_nodereal() -> None:
+    require_key("NODEREAL_API_KEY")
+    with Indexer("bnb", "mainnet", settings=Settings.from_env()) as indexer:
+        records = indexer.account_transactions(BSC_ACCOUNT, limit=1)
+    assert records
+    assert records[0].native.history_source == "nodereal"
+
+
+def test_example_script_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+    require_key("BLOCKSCOUT_API_KEY")
+    monkeypatch.setattr(sys, "argv", ["account_summary.py"])
+    runpy.run_path(str(EXAMPLES / "account_summary.py"), run_name="__main__")
+
+
+# pyzmq warns about Windows' default event loop when the notebook kernel starts; it is not this
+# project's warning, and the notebook still runs.
+@pytest.mark.filterwarnings("ignore:Proactor event loop:RuntimeWarning")
+def test_example_notebook_runs() -> None:
+    require_key("BLOCKSCOUT_API_KEY")
+    notebook = nbformat.read(EXAMPLES / "account_analysis.ipynb", as_version=4)
+    NotebookClient(notebook, timeout=300, kernel_name="python3").execute()

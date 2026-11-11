@@ -336,6 +336,73 @@ Ethereum, Arbitrum, OP Mainnet, Base, Polygon PoS and BNB Smart Chain share one 
 a profile per chain. Every lookup first checks the RPC endpoint's `eth_chainId`; an endpoint
 of another network stops with `WrongNetwork` and names the setting to fix.
 
+| `--chain` | Testnet (default) | Gas token | Tokens |
+|---|---|---|---|
+| `ethereum` | Sepolia | ETH | ERC-20 |
+| `arbitrum` | Arbitrum Sepolia | ETH | ERC-20 |
+| `optimism` | OP Sepolia | ETH | ERC-20 |
+| `base` | Base Sepolia | ETH | ERC-20 |
+| `polygon` | Amoy | POL | ERC-20 |
+| `bnb` | BNB Smart Chain testnet | BNB | BEP-20 |
+
+`--network mainnet` must be asked for explicitly; `--network localnet` reads a local node such
+as Anvil at `http://localhost:8545`. Set `<CHAIN>_<NETWORK>_RPC_SERVER` in `.env` to use your
+own endpoint. Fees include the L1 data fee on OP Mainnet and Base and the blob fee on blob
+transactions; [the EVM page](https://majidali32ms-lang.github.io/multichain-analytics-indexer/chains/evm/)
+lists every field.
+
+### Commands
+
+```bash
+multichain-indexer --chain ethereum index account <address>
+```
+
+```bash
+multichain-indexer --chain ethereum index token <contract>
+```
+
+```bash
+multichain-indexer --chain base index contract <address>
+```
+
+```bash
+multichain-indexer --chain ethereum sync <address>
+```
+
+```bash
+multichain-indexer --chain ethereum metrics --days 30
+```
+
+```bash
+multichain-indexer --chain ethereum export --format csv --output transactions.csv
+```
+
+```text
+Address      0xAA37651031A4b641962550415dB2C43E8d962232
+Kind         externally owned account
+Balance      0.000000000001 ETH
+Nonce        20
+As of block  12113523
+
+2026-11-09 17:11  0xa2a58cf2e34c2ec06ba20beeb01120204124fc117e856569d8c5f9475fcd44ec  legacy  final  0.038050303691589778 ETH  0.00000021 ETH  21000  1 ERC-20
+2026-03-01 08:06  0xbef676788756bdd8774837d63ef4b7cb2c350fdf8bc6b9a329400da1497d09bf  eip-1559  final  0 ETH  0.000000541183870018 ETH  498707  1 ERC-20
+```
+
+```text
+Token         0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14
+Standard      ERC-20
+Name          Wrapped Ether
+Symbol        WETH
+Decimals      18
+Total supply  193104088539324295320660 base units
+As of block   12113524
+```
+
+```text
+Synced 0xAA37651031A4b641962550415dB2C43E8d962232 on ethereum testnet: 20 transactions up to height 12113525, 65 requests in 13.9s
+Synced 0xAA37651031A4b641962550415dB2C43E8d962232 on ethereum testnet: 0 transactions up to height 12113526, 5 requests in 2.9s
+```
+
 ### Account history
 
 Standard JSON-RPC cannot list an address's transactions, so a history service lists them.
