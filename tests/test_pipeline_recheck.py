@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Callable, Iterator, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -161,15 +161,37 @@ class ToyIndexer(BaseIndexer):
         return head - 20
 
 
+OpenStorage = Callable[[Path], SQLiteStorage]
+
+
+@pytest.fixture
+def open_storage() -> Iterator[OpenStorage]:
+    """Open databases for a test and close every one of them afterwards."""
+    opened: list[SQLiteStorage] = []
+
+    def open_one(path: Path) -> SQLiteStorage:
+        opened.append(SQLiteStorage(path))
+        return opened[-1]
+
+    yield open_one
+    for storage in opened:
+        storage.close()
+
+
+@pytest.fixture
+def storage(open_storage: OpenStorage, tmp_path: Path) -> SQLiteStorage:
+    return open_storage(tmp_path / "toy.db")
+
+
 def statuses(storage: SQLiteStorage) -> dict[str, Status]:
     stored = storage.load_transactions("toy", "testnet", ToyNative, account=ACCOUNT)
     return {item.id: item.status for item in stored}
 
 
 async def test_a_pending_record_a_reorg_dropped_is_marked_orphaned_not_deleted(
-    tmp_path: Path,
+    open_storage: OpenStorage, tmp_path: Path
 ) -> None:
-    storage = SQLiteStorage(tmp_path / "toy.db")
+    storage = open_storage(tmp_path / "toy.db")
     indexer = ToyIndexer([record("kept"), record("dropped")], dropped={"dropped"})
     pipeline = Pipeline(indexer, storage)
     first = await pipeline.sync_account(ACCOUNT)
@@ -181,15 +203,14 @@ async def test_a_pending_record_a_reorg_dropped_is_marked_orphaned_not_deleted(
     storage.close()
 
     assert indexer.rechecked == [["dropped"]]
-    assert statuses(SQLiteStorage(tmp_path / "toy.db")) == {
+    assert statuses(open_storage(tmp_path / "toy.db")) == {
         "kept": Status.FINAL,
         "dropped": Status.ORPHANED,
     }
     assert (first.records_fetched, second.records_fetched) == (2, 1)
 
 
-async def test_records_the_sync_fetched_again_are_not_rechecked(tmp_path: Path) -> None:
-    storage = SQLiteStorage(tmp_path / "toy.db")
+async def test_records_the_sync_fetched_again_are_not_rechecked(storage: SQLiteStorage) -> None:
     indexer = ToyIndexer([record("a"), record("b")], dropped=set())
     pipeline = Pipeline(indexer, storage)
     await pipeline.sync_account(ACCOUNT)
@@ -198,8 +219,7 @@ async def test_records_the_sync_fetched_again_are_not_rechecked(tmp_path: Path) 
     assert statuses(storage) == {"a": Status.PENDING, "b": Status.PENDING}
 
 
-async def test_nothing_changed_leaves_the_records_as_they_are(tmp_path: Path) -> None:
-    storage = SQLiteStorage(tmp_path / "toy.db")
+async def test_nothing_changed_leaves_the_records_as_they_are(storage: SQLiteStorage) -> None:
     indexer = ToyIndexer([record("a")], dropped=set())
     pipeline = Pipeline(indexer, storage)
     await pipeline.sync_account(ACCOUNT)
@@ -209,8 +229,7 @@ async def test_nothing_changed_leaves_the_records_as_they_are(tmp_path: Path) ->
     assert statuses(storage) == {"a": Status.PENDING}
 
 
-async def test_final_and_failed_records_are_never_rechecked(tmp_path: Path) -> None:
-    storage = SQLiteStorage(tmp_path / "toy.db")
+async def test_final_and_failed_records_are_never_rechecked(storage: SQLiteStorage) -> None:
     indexer = ToyIndexer(
         [record("final", Status.FINAL), record("failed", Status.FAILED)], dropped=set()
     )
@@ -221,7 +240,9 @@ async def test_final_and_failed_records_are_never_rechecked(tmp_path: Path) -> N
     assert indexer.rechecked == []
 
 
-async def test_a_database_written_by_0_4_0_loads_and_is_rechecked(tmp_path: Path) -> None:
+async def test_a_database_written_by_0_4_0_loads_and_is_rechecked(
+    open_storage: OpenStorage, tmp_path: Path
+) -> None:
     path = tmp_path / "old.db"
     connection = sqlite3.connect(path)
     connection.executescript(SCHEMA_0_4_0)
@@ -252,7 +273,7 @@ async def test_a_database_written_by_0_4_0_loads_and_is_rechecked(tmp_path: Path
         )
     connection.close()
 
-    storage = SQLiteStorage(path)
+    storage = open_storage(path)
     indexer = ToyIndexer([], dropped={"old-pending"})
     result = await Pipeline(indexer, storage).sync_account(ACCOUNT)
     assert result.from_height == 61
@@ -260,8 +281,7 @@ async def test_a_database_written_by_0_4_0_loads_and_is_rechecked(tmp_path: Path
     assert statuses(storage) == {"old-final": Status.FINAL, "old-pending": Status.ORPHANED}
 
 
-def test_storage_filters_by_status(tmp_path: Path) -> None:
-    storage = SQLiteStorage(tmp_path / "toy.db")
+def test_storage_filters_by_status(storage: SQLiteStorage) -> None:
     storage.save_transactions("toy", "testnet", ACCOUNT, [record("p"), record("f", Status.FINAL)])
     pending = storage.load_transactions(
         "toy", "testnet", ToyNative, account=ACCOUNT, status=Status.PENDING
