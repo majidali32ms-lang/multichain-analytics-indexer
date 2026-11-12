@@ -77,7 +77,7 @@ idna==3.20
     # via
     #   requests
     #   yarl
-jsonalias==0.1.1
+jsonalias==0.1.2
     # via solders
 msgpack==1.2.4
     # via py-algorand-sdk
