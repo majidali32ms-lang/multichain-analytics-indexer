@@ -23,7 +23,7 @@ FIXTURE = json.loads(
 )
 ADDRESS = FIXTURE["address"]
 TOP, BOTTOM = FIXTURE["to_block"], FIXTURE["from_block"]
-KEY = "alchemy-test-key-0123456789abcdef"
+KEY = "alchemy-test-key-value"
 METHOD = "rpc:alchemy_getAssetTransfers"
 
 
