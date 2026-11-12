@@ -158,3 +158,31 @@ async def test_all_scope_lists_a_token_transfer_inside_another_call(
     finally:
         await adapter.aclose()
     assert (INNER_TX in hashes) is listed
+
+
+# A small Base Sepolia sender: three transactions sent and one received in its newest million
+# blocks on 2026-11-12.
+BASE_SEPOLIA_ACCOUNT = "0xc9aefa97e362db77b379d1097af6fc047bc9a49e"
+
+
+def test_base_sepolia_history_from_alchemy() -> None:
+    require_key("ALCHEMY_API_KEY")
+    with Indexer("base", settings=Settings.from_env()) as indexer:
+        records = indexer.account_transactions(BASE_SEPOLIA_ACCOUNT, limit=2)
+    assert records
+    assert all(record.native.history_source == "alchemy" for record in records)
+    assert all(record.native.l1_data is not None for record in records)
+
+
+async def test_base_mainnet_history_from_alchemy() -> None:
+    require_key("ALCHEMY_API_KEY")
+    adapter = create_indexer("base", "mainnet", Settings.from_env())
+    try:
+        head = await adapter.chain_head()
+        page = await anext(
+            adapter.iter_account_transactions(OP_STACK_WETH, from_height=head - 30, to_height=head)
+        )
+    finally:
+        await adapter.aclose()
+    assert page.records
+    assert {record.native.history_source for record in page.records} == {"alchemy"}
