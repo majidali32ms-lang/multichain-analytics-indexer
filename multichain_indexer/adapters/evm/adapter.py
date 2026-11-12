@@ -14,6 +14,7 @@ from typing import ClassVar, cast
 
 from pydantic import JsonValue
 
+from multichain_indexer.adapters.evm.alchemy import create_alchemy_history
 from multichain_indexer.adapters.evm.client import EvmRpc
 from multichain_indexer.adapters.evm.encoding import parse_quantity
 from multichain_indexer.adapters.evm.explorer import (
@@ -83,6 +84,7 @@ HASH_HEX_DIGITS = 64
 HEX_CHARACTERS = frozenset("0123456789abcdefABCDEF")
 
 HISTORY_SOURCES: dict[str, HistorySourceFactory] = {
+    "alchemy": create_alchemy_history,
     "blockscout": create_blockscout_history,
     "etherscan": create_etherscan_history,
     "nodereal": create_nodereal_history,

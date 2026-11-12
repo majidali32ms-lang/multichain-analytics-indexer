@@ -20,6 +20,7 @@ LOCALNET_RPC_SERVER = "http://localhost:8545"
 LOCALNET_TITLE = "a local network"
 
 # Names in the adapter's HISTORY_SOURCES.
+ALCHEMY = "alchemy"
 BLOCKSCOUT = "blockscout"
 ETHERSCAN = "etherscan"
 NODEREAL = "nodereal"
@@ -98,10 +99,10 @@ BASE = EvmChain(
     native_symbol="ETH",
     token_standard="ERC-20",
     networks={
-        # Blockscout's free plan dropped Base on 2026-10-01 and Etherscan's never had it, so
-        # neither is a default; the owner chooses a free source.
-        MAINNET: EvmNetwork("Base Mainnet", 8453, "https://mainnet.base.org", None),
-        TESTNET: EvmNetwork("Base Sepolia", 84532, "https://sepolia.base.org", None),
+        # Blockscout's free plan dropped Base on 2026-10-01 and Etherscan serves it on paid
+        # plans only; Alchemy's free plan lists transfers on both networks.
+        MAINNET: EvmNetwork("Base Mainnet", 8453, "https://mainnet.base.org", ALCHEMY),
+        TESTNET: EvmNetwork("Base Sepolia", 84532, "https://sepolia.base.org", ALCHEMY),
     },
 )
 

@@ -407,7 +407,8 @@ def test_unknown_history_source_is_refused() -> None:
     env = {"ETHEREUM_TESTNET_HISTORY_SOURCE": SecretStr("nosuch")}
     adapter = indexer_factory(ETHEREUM)(None, Settings(env=env), None)
     with pytest.raises(
-        ConfigError, match="ETHEREUM_TESTNET_HISTORY_SOURCE must be one of: blockscout, etherscan"
+        ConfigError,
+        match="ETHEREUM_TESTNET_HISTORY_SOURCE must be one of: alchemy, blockscout, etherscan",
     ):
         adapter._history_source()
 
@@ -426,8 +427,6 @@ def test_explorers_do_not_serve_local_networks() -> None:
     ("chain", "network", "title"),
     [
         (BNB, "testnet", "BNB Smart Chain testnet"),
-        (BASE, "mainnet", "Base Mainnet"),
-        (BASE, "testnet", "Base Sepolia"),
     ],
 )
 async def test_networks_without_a_free_history_service_say_so(
