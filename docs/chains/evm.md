@@ -87,10 +87,16 @@ hashes. `<CHAIN>_<NETWORK>_HISTORY_SOURCE` chooses it:
 | `blockscout` | Blockscout's Etherscan-compatible `txlist` | `BLOCKSCOUT_API_KEY` | Ethereum, Arbitrum, OP Mainnet and their testnets |
 | `etherscan` | Etherscan's `txlist` | `ETHERSCAN_API_KEY` | Polygon PoS, Amoy |
 | `nodereal` | NodeReal's `nr_getAssetTransfers`, external transfers | `NODEREAL_API_KEY` | BNB Smart Chain mainnet |
+| `alchemy` | Alchemy's `alchemy_getAssetTransfers`, external transfers including those that move no ETH | `ALCHEMY_API_KEY` | Base Mainnet, Base Sepolia |
 | `rpc-scan` | every block over the RPC | none | `localnet` |
 
-Base and BNB Smart Chain testnet have no free default. On BNB Smart Chain testnet a
-transaction can still be read by hash from Python, with `fetch_transaction`.
+BNB Smart Chain testnet has no free default; a transaction there can still be read by hash
+from Python, with `fetch_transaction`. Alchemy serves Base with the same key on both networks,
+with no network to switch on; it refuses the `internal` category on Base ("only supported for
+ETH and MATIC"), so internal transfers are not listed. On Base Sepolia, Alchemy listed the same
+transactions as reading every block over the RPC: 3 of 3 over 200 blocks for a sender and 6 of
+6 over 120 blocks for a busy receiver. Alchemy accepts a range that ends past what it has
+indexed, so on Base the checkpoint is kept safe by the finalized block alone.
 
 The free plans, their limits and their terms are in the
 [README](https://github.com/majidali32ms-lang/multichain-analytics-indexer#account-history).
@@ -108,7 +114,10 @@ Rates were measured on 2026-11-11 through this project's client, one test at a t
 | the twelve default RPC endpoints | 5 a second | 0 of 30 each |
 | Sepolia, Arbitrum Sepolia, Base Sepolia RPC | 10 a second | 1, 3 and 1 of 30 |
 
-The defaults are Blockscout 4, Etherscan 2, NodeReal 0.5 and RPC 5 requests a second.
+Alchemy's `alchemy_getAssetTransfers` took 30 requests at 2, 4 and 8 a second on 2026-11-12
+without a refusal; its free plan's 300 compute units a second allow about 2.5 of these calls.
+
+The defaults are Blockscout 4, Etherscan 2, NodeReal 0.5, Alchemy 2 and RPC 5 requests a second.
 Polygon's documented Amoy endpoint, dRPC, timed out on 2 and 3 of 30 requests in the first
 test and failed 29 of 30 later the same day, so Amoy's default is Tenderly's gateway, which
 Polygon's docs list as a provider: 0 of 30 failed.
@@ -125,7 +134,7 @@ reached, so what a service has not indexed yet is listed by the next sync.
 | Scope | Keeps | Sources |
 |---|---|---|
 | `direct` (default) | transactions the address sent or received (`txlist`) | all |
-| `all` | also ERC-20 (BEP-20) transfers to or from the address inside someone else's call (`tokentx` with the same block range) | Blockscout, Etherscan, NodeReal (category `20`) |
+| `all` | also ERC-20 (BEP-20) transfers to or from the address inside someone else's call (`tokentx` with the same block range) | Blockscout, Etherscan, NodeReal (category `20`), Alchemy (`erc20`) |
 
 An example: on Arbitrum Sepolia, transaction
 `0x67398b1eef1d67328d1f558e7d5131ec08f3cd9b8d909a38c281ec287a2f0e08` was sent by `0x523d…4612`

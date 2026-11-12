@@ -416,18 +416,19 @@ fields such as `l1Fee` (OP Mainnet, Base), `gasUsedForL1` (Arbitrum) and blob ga
 | Arbitrum | Blockscout | Blockscout (Arbitrum Sepolia) |
 | OP Mainnet | Blockscout | Blockscout (OP Sepolia) |
 | Polygon PoS | Etherscan | Etherscan (Amoy) |
-| Base | none yet | none yet |
+| Base | Alchemy | Alchemy (Base Sepolia) |
 | BNB Smart Chain | NodeReal | none: NodeReal serves mainnet only, so transactions are read by hash |
 | any chain, `--network localnet` | reads every block over the RPC (Anvil) | |
 
 `<CHAIN>_<NETWORK>_HISTORY_SOURCE` switches the service (`blockscout`, `etherscan`,
-`nodereal` or `rpc-scan`) without a code change. Account and contract lookups need no key; history needs
+`nodereal`, `alchemy` or `rpc-scan`) without a code change. Account and contract lookups need no key; history needs
 the chosen service's free key:
 
 | Setting | Where to get it | Free plan, as its provider states it |
 |---|---|---|
 | `BLOCKSCOUT_API_KEY` | dev.blockscout.com, no card needed | 5 requests a second and 100,000 credits a day (a history page costs 20, so about 5,000 pages); requests fail once the day's credits are used. Base, Polygon and zkSync left the free plan on 1 October 2026. |
 | `ETHERSCAN_API_KEY` | etherscan.io | 3 requests a second, 100,000 a day, at most 1,000 records a request since 1 July 2026. Selected chains only. |
+| `ALCHEMY_API_KEY` | dashboard.alchemy.com, no card asked on sign-up | 30 million compute units a month and 300 a second (the dashboard shows 25 requests a second). `alchemy_getAssetTransfers` costs 120, so about 250,000 calls a month; this project sends two a second, and 30 calls at 2, 4 and 8 a second drew no refusal. Each call covers at most 1,000,000 blocks, sent and received transactions are separate calls, and internal transfers are not listed on Base. |
 | `NODEREAL_API_KEY` | dashboard.nodereal.io, no card asked on sign-up | 10 million compute units a month and 150 a second per key. `nr_getAssetTransfers` costs 250, so about 40,000 calls a month; this project sends one every 2 seconds. Each call covers at most 1,000,000 blocks (the service refuses 2,000,000 or more), and sent and received transactions are separate calls, so a first sync of a long history takes many calls. |
 
 What each free plan answered on 11 November 2026, with one request per network:
@@ -460,8 +461,8 @@ terms apply to your key, not this project's:
 - **NodeReal** ([terms](https://nodereal.io/terms)): no clause on attribution, caching or
   redistribution was found. The key sits in the endpoint URL; this project keeps it out of
   messages and logs, but treat any URL you copy from your dashboard as a secret.
-- **Alchemy** ([terms](https://legal.alchemy.com/), version 2.0 of 27 June 2025), planned for
-  Base history: use is "solely for your internal business purposes" (2.1); you may not resell,
+- **Alchemy** ([terms](https://legal.alchemy.com/), version 2.0 of 27 June 2025), for Base
+  history: use is "solely for your internal business purposes" (2.1); you may not resell,
   mirror or let others use the service (2.2(v)), scrape it or use crawlers (2.2(viii), (xi)),
   or spread use across accounts to get past limits (2.2(x)); the free tier is "as is" and can
   end at any time (2.11); on termination, Alchemy's confidential information must be destroyed
@@ -480,7 +481,7 @@ out and fetched on a later sync.
 | Scope | Keeps | Extra cost per history page |
 |---|---|---|
 | `direct` (default) | transactions the address sent or received | none |
-| `all` | also those that moved an ERC-20 (BEP-20) token to or from the address inside someone else's contract call | Blockscout and Etherscan: a second call, `tokentx`, so twice the calls (Blockscout charges 20 credits each, 40 a page); NodeReal: none, the same calls ask for BEP-20 transfers too (250 compute units each) |
+| `all` | also those that moved an ERC-20 (BEP-20) token to or from the address inside someone else's contract call | Blockscout and Etherscan: a second call, `tokentx`, so twice the calls (Blockscout charges 20 credits each, 40 a page); NodeReal and Alchemy: none, the same calls ask for BEP-20 or ERC-20 transfers too (250 and 120 compute units each) |
 
 Every extra transaction also costs three RPC reads (transaction, receipt, block). The block
 scan used on `localnet` lists direct transactions only. NFT transfers inside other calls are
