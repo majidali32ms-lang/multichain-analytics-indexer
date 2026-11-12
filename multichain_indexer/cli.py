@@ -32,6 +32,10 @@ _P = ParamSpec("_P")
 _T = TypeVar("_T")
 
 DEFAULT_RECENT_TRANSACTIONS = 10
+EVM_CHAINS = ("ethereum", "arbitrum", "optimism", "base", "polygon", "bnb")
+# Lines a data provider's terms require wherever its data is shown, keyed by the history
+# source named in a record's native block. Human-readable output only, never in exports.
+ATTRIBUTIONS = {"etherscan": "Powered by Etherscan.io APIs"}
 # The exit code Click uses when the reader of a pipe goes away, as in `... | head`.
 EXIT_OUTPUT_CLOSED = 1
 # A write to a closed pipe fails with EPIPE on Linux and EINVAL on Windows.
@@ -89,7 +93,10 @@ def _with_indexer(
 @click.option(
     "--network",
     type=click.Choice(["mainnet", "testnet", "devnet", "localnet"]),
-    help="Network to read. Defaults to Algorand testnet, Solana devnet or NEAR testnet.",
+    help=(
+        "Network to read. Defaults to Algorand testnet, Solana devnet, NEAR testnet, or the "
+        "EVM chain's testnet, such as Sepolia."
+    ),
 )
 @click.option("--db", "database", type=click.Path(dir_okay=False, path_type=Path))
 @click.option("--env-file", default=".env", show_default=True)
@@ -116,7 +123,7 @@ def cli(
 
 @cli.group()
 def index() -> None:
-    """Look up one account, Algorand ASA or app, Solana SPL token or program, or NEAR contract."""
+    """Look up one account, Algorand ASA or app, Solana SPL token or program, or contract."""
 
 
 @index.command("account")
@@ -134,8 +141,11 @@ def index_account(indexer: Indexer, address: str, limit: int) -> None:
     """Show an account's state, balance in ALGO, SOL or NEAR, and its recent transactions."""
     _echo_fields(indexer.describe(indexer.account(address)))
     click.echo()
-    for record in indexer.account_transactions(address, limit=limit):
+    records = indexer.account_transactions(address, limit=limit)
+    for record in records:
         click.echo(_transaction_line(indexer, record))
+    for line in _attributions(records):
+        click.echo(line)
 
 
 @index.command("asset")
@@ -153,8 +163,8 @@ def index_asset(indexer: Indexer, asa_id: str) -> None:
 @click.pass_obj
 @_with_indexer
 def index_token(indexer: Indexer, mint: str) -> None:
-    """Show a Solana SPL Token or Token-2022 mint."""
-    _require_chain(indexer, "solana", "index token")
+    """Show a Solana SPL Token or Token-2022 mint, or an EVM chain's ERC-20 or BEP-20 token."""
+    _require_chain(indexer, ("solana", *EVM_CHAINS), "index token")
     _echo_fields(indexer.describe(indexer.asset(mint)))
 
 
@@ -179,13 +189,13 @@ def index_program(indexer: Indexer, program_id: str) -> None:
 
 
 @index.command("contract")
-@click.argument("account_id")
+@click.argument("contract_id")
 @click.pass_obj
 @_with_indexer
-def index_contract(indexer: Indexer, account_id: str) -> None:
-    """Show the contract deployed on a NEAR account ID."""
-    _require_chain(indexer, "near", "index contract")
-    _echo_fields(indexer.describe(indexer.contract(account_id)))
+def index_contract(indexer: Indexer, contract_id: str) -> None:
+    """Show the contract deployed on a NEAR account ID, or at an EVM contract address."""
+    _require_chain(indexer, ("near", *EVM_CHAINS), "index contract")
+    _echo_fields(indexer.describe(indexer.contract(contract_id)))
 
 
 @cli.command()
@@ -320,15 +330,21 @@ def _discard_pending_output() -> None:
     os.close(devnull)
 
 
-def _require_chain(indexer: Indexer, chain: str, command: str) -> None:
-    if indexer.profile.name != chain:
-        raise InvalidInput(f"{command} is for {chain}, not {indexer.profile.name}")
+def _require_chain(indexer: Indexer, chains: str | tuple[str, ...], command: str) -> None:
+    allowed = (chains,) if isinstance(chains, str) else chains
+    if indexer.profile.name not in allowed:
+        raise InvalidInput(f"{command} is for {', '.join(allowed)}, not {indexer.profile.name}")
 
 
 def _echo_fields(fields: dict[str, str]) -> None:
     width = max(len(label) for label in fields)
     for label, value in fields.items():
         click.echo(f"{label.ljust(width)}  {value}")
+
+
+def _attributions(records: list[TransactionRecord]) -> list[str]:
+    sources = {getattr(record.native, "history_source", None) for record in records}
+    return [line for source, line in ATTRIBUTIONS.items() if source in sources]
 
 
 def _transaction_line(indexer: Indexer, record: TransactionRecord) -> str:

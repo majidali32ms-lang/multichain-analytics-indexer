@@ -165,8 +165,9 @@ class Storage(ABC):
         *,
         account: str | None = None,
         since: datetime | None = None,
+        status: Status | None = None,
     ) -> list[TransactionRecord]:
-        """Return stored transactions, newest first."""
+        """Return stored transactions, newest first, optionally only those with ``status``."""
 
     @abstractmethod
     def save_snapshot(self, record: AccountRecord | AssetRecord | ContractRecord) -> None:
@@ -231,6 +232,7 @@ class SQLiteStorage(Storage):
         *,
         account: str | None = None,
         since: datetime | None = None,
+        status: Status | None = None,
     ) -> list[TransactionRecord]:
         query = _SELECT_TRANSACTIONS
         arguments: list[str] = []
@@ -242,6 +244,9 @@ class SQLiteStorage(Storage):
         if since is not None:
             query += " AND t.time >= ?"
             arguments.append(since.isoformat())
+        if status is not None:
+            query += " AND t.status = ?"
+            arguments.append(status.value)
         query += " ORDER BY t.time DESC, t.tx_id"
         rows = self._connection.execute(query, arguments).fetchall()
         return [_transaction_from_row(row, native_model) for row in rows]

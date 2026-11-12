@@ -6,7 +6,7 @@ from __future__ import annotations
 import asyncio
 import json
 import threading
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -44,10 +44,15 @@ class Reply:
 
 
 class FakeNode:
-    """Serves scripted replies. A list is consumed one reply per request."""
+    """Serves scripted replies. A list is consumed one reply per request.
+
+    A handler answers from the request instead: it gets a GET request's query, or a JSON-RPC
+    call's params, and wins over a route with the same key.
+    """
 
     def __init__(self) -> None:
         self.routes: dict[str, Reply | list[Reply]] = {}
+        self.handlers: dict[str, Callable[[Any], Reply]] = {}
         self.requests: list[tuple[str, dict[str, str]]] = []
         self.rpc_calls: list[tuple[str, list[object]]] = []
         self.post_bodies: list[tuple[str, dict[str, Any]]] = []
@@ -92,7 +97,9 @@ class FakeNode:
     async def _handle(self, request: web.Request) -> web.Response:
         self.requests.append((request.path, dict(request.query)))
         self.received_headers.append(dict(request.headers))
-        reply = self._next_reply(await self._route_key(request))
+        key = await self._route_key(request)
+        handler = self.handlers.get(key)
+        reply = handler(await self._request_input(request)) if handler else self._next_reply(key)
         if reply.delay:
             await asyncio.sleep(reply.delay)
         text = reply.raw if reply.raw is not None else json.dumps(reply.body)
@@ -116,6 +123,11 @@ class FakeNode:
 
     def posted_to(self, path: str) -> list[dict[str, Any]]:
         return [body for requested, body in self.post_bodies if requested == path]
+
+    async def _request_input(self, request: web.Request) -> Any:
+        if request.method != "POST":
+            return dict(request.query)
+        return json.loads(await request.text()).get("params")
 
     def _next_reply(self, key: str) -> Reply:
         route = self.routes.get(key)

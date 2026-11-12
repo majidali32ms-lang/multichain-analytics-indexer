@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.5.0
+
+Adds the EVM chains: Ethereum, Arbitrum, OP Mainnet, Base, Polygon PoS and BNB Smart Chain,
+through one adapter with a profile per chain.
+
+- `--chain ethereum|arbitrum|optimism|base|polygon|bnb`, testnet by default (Sepolia, Arbitrum
+  Sepolia, OP Sepolia, Base Sepolia, Amoy, BSC testnet), `--network mainnet` on request, and
+  `--network localnet` for a local node such as Anvil.
+- Every lookup first checks the RPC endpoint's `eth_chainId`; an endpoint of another network
+  stops with `WrongNetwork` and names the setting to fix, never the endpoint.
+- `index account`, `index contract` and `index token` (ERC-20, BEP-20 on BNB Smart Chain),
+  read at one block. A mixed-case address with a wrong EIP-55 checksum is refused.
+- Transactions and receipts come from the chain's own RPC: type, EIP-1559 fees, method
+  selector, ERC-20 and ERC-721 transfers, EIP-4844 blob gas, `l1Fee` and its parts on OP
+  Mainnet and Base, `gasUsedForL1` on Arbitrum. `fee` adds the blob fee and the L1 data fee.
+- Account history from a service chosen per chain and network with
+  `<CHAIN>_<NETWORK>_HISTORY_SOURCE`: Blockscout, Etherscan, NodeReal (BNB Smart Chain
+  mainnet), Alchemy (Base), or reading every block on `localnet`. Each needs its own free key
+  (`BLOCKSCOUT_API_KEY`, `ETHERSCAN_API_KEY`, `NODEREAL_API_KEY`, `ALCHEMY_API_KEY`); lookups
+  need none. BNB Smart Chain testnet has no free history service.
+- `<CHAIN>_<NETWORK>_HISTORY_SCOPE=all` also lists ERC-20 transfers to or from the address
+  inside other accounts' calls; `direct`, the default, lists what it sent or received.
+- `index account` prints "Powered by Etherscan.io APIs" under transactions Etherscan listed,
+  and records name their history service in `native.history_source`.
+- Metrics: gas, fees in the gas token and in wei split into execution, L1 data and blob fees,
+  Arbitrum's L1 share of gas, transaction types, top tokens and contracts.
+- Records up to the endpoint's finalized block are final. A sync never moves its checkpoint
+  past that block, nor past what NodeReal has indexed.
+- After each sync, stored pending records the history did not list again are checked again.
+  `BaseIndexer.recheck_pending` is new, a change to `core/`; by default it changes nothing, so
+  Algorand, Solana and NEAR behave as before. On EVM chains a record a reorg dropped becomes
+  `orphaned`; nothing is deleted. Databases from 0.4.0 load unchanged.
+- `load_transactions` takes an optional status filter.
+- New dependency: `web3`, for its address, hashing and ABI helpers.
+- Post-quantum status of the six EVM chains re-checked on 2026-11-09: still nothing live.
+  Optimism has a roadmap; BNB Smart Chain a research report.
+
 ## 0.4.0
 
 Adds post-quantum readiness.

@@ -330,6 +330,163 @@ burnt. Accounts include their kind, access keys with their permissions, and thei
 - `status` is `pending` until the receipts that decide it have run. Transactions in the last
   300 blocks are fetched again on the next sync.
 
+## EVM chains
+
+Ethereum, Arbitrum, OP Mainnet, Base, Polygon PoS and BNB Smart Chain share one adapter, with
+a profile per chain. Every lookup first checks the RPC endpoint's `eth_chainId`; an endpoint
+of another network stops with `WrongNetwork` and names the setting to fix.
+
+| `--chain` | Testnet (default) | Gas token | Tokens |
+|---|---|---|---|
+| `ethereum` | Sepolia | ETH | ERC-20 |
+| `arbitrum` | Arbitrum Sepolia | ETH | ERC-20 |
+| `optimism` | OP Sepolia | ETH | ERC-20 |
+| `base` | Base Sepolia | ETH | ERC-20 |
+| `polygon` | Amoy | POL | ERC-20 |
+| `bnb` | BNB Smart Chain testnet | BNB | BEP-20 |
+
+`--network mainnet` must be asked for explicitly; `--network localnet` reads a local node such
+as Anvil at `http://localhost:8545`. Set `<CHAIN>_<NETWORK>_RPC_SERVER` in `.env` to use your
+own endpoint. Fees include the L1 data fee on OP Mainnet and Base and the blob fee on blob
+transactions; [the EVM page](https://majidali32ms-lang.github.io/multichain-analytics-indexer/chains/evm/)
+lists every field.
+
+### Commands
+
+```bash
+multichain-indexer --chain ethereum index account <address>
+```
+
+```bash
+multichain-indexer --chain ethereum index token <contract>
+```
+
+```bash
+multichain-indexer --chain base index contract <address>
+```
+
+```bash
+multichain-indexer --chain ethereum sync <address>
+```
+
+```bash
+multichain-indexer --chain ethereum metrics --days 30
+```
+
+```bash
+multichain-indexer --chain ethereum export --format csv --output transactions.csv
+```
+
+```text
+Address      0xAA37651031A4b641962550415dB2C43E8d962232
+Kind         externally owned account
+Balance      0.000000000001 ETH
+Nonce        20
+As of block  12113523
+
+2026-11-09 17:11  0xa2a58cf2e34c2ec06ba20beeb01120204124fc117e856569d8c5f9475fcd44ec  legacy  final  0.038050303691589778 ETH  0.00000021 ETH  21000  1 ERC-20
+2026-03-01 08:06  0xbef676788756bdd8774837d63ef4b7cb2c350fdf8bc6b9a329400da1497d09bf  eip-1559  final  0 ETH  0.000000541183870018 ETH  498707  1 ERC-20
+```
+
+```text
+Token         0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14
+Standard      ERC-20
+Name          Wrapped Ether
+Symbol        WETH
+Decimals      18
+Total supply  193104088539324295320660 base units
+As of block   12113524
+```
+
+```text
+Synced 0xAA37651031A4b641962550415dB2C43E8d962232 on ethereum testnet: 20 transactions up to height 12113525, 65 requests in 13.9s
+Synced 0xAA37651031A4b641962550415dB2C43E8d962232 on ethereum testnet: 0 transactions up to height 12113526, 5 requests in 2.9s
+```
+
+### Account history
+
+Standard JSON-RPC cannot list an address's transactions, so a history service lists them.
+The transactions, receipts and blocks themselves always come from the chain's own RPC, so
+fields such as `l1Fee` (OP Mainnet, Base), `gasUsedForL1` (Arbitrum) and blob gas
+(EIP-4844) are read as the chain reports them.
+
+| Chain | Mainnet | Testnet |
+|---|---|---|
+| Ethereum | Blockscout | Blockscout (Sepolia) |
+| Arbitrum | Blockscout | Blockscout (Arbitrum Sepolia) |
+| OP Mainnet | Blockscout | Blockscout (OP Sepolia) |
+| Polygon PoS | Etherscan | Etherscan (Amoy) |
+| Base | Alchemy | Alchemy (Base Sepolia) |
+| BNB Smart Chain | NodeReal | none: NodeReal serves mainnet only, so transactions are read by hash |
+| any chain, `--network localnet` | reads every block over the RPC (Anvil) | |
+
+`<CHAIN>_<NETWORK>_HISTORY_SOURCE` switches the service (`blockscout`, `etherscan`,
+`nodereal`, `alchemy` or `rpc-scan`) without a code change. Account and contract lookups need no key; history needs
+the chosen service's free key:
+
+| Setting | Where to get it | Free plan, as its provider states it |
+|---|---|---|
+| `BLOCKSCOUT_API_KEY` | dev.blockscout.com, no card needed | 5 requests a second and 100,000 credits a day (a history page costs 20, so about 5,000 pages); requests fail once the day's credits are used. Base, Polygon and zkSync left the free plan on 1 October 2026. |
+| `ETHERSCAN_API_KEY` | etherscan.io | 3 requests a second, 100,000 a day, at most 1,000 records a request since 1 July 2026. Selected chains only. |
+| `ALCHEMY_API_KEY` | dashboard.alchemy.com, no card asked on sign-up | 30 million compute units a month and 300 a second (the dashboard shows 25 requests a second). `alchemy_getAssetTransfers` costs 120, so about 250,000 calls a month; this project sends two a second, and 30 calls at 2, 4 and 8 a second drew no refusal. Each call covers at most 1,000,000 blocks, sent and received transactions are separate calls, and internal transfers are not listed on Base. |
+| `NODEREAL_API_KEY` | dashboard.nodereal.io, no card asked on sign-up | 10 million compute units a month and 150 a second per key. `nr_getAssetTransfers` costs 250, so about 40,000 calls a month; this project sends one every 2 seconds. Each call covers at most 1,000,000 blocks (the service refuses 2,000,000 or more), and sent and received transactions are separate calls, so a first sync of a long history takes many calls. |
+
+What each free plan answered on 11 November 2026, with one request per network:
+
+| Network | Blockscout | Etherscan |
+|---|---|---|
+| Ethereum, Sepolia | yes | yes |
+| Arbitrum One, Arbitrum Sepolia | yes | yes |
+| OP Mainnet | yes | no, paid plan |
+| OP Sepolia | yes | yes |
+| Base Mainnet | no, HTTP 402 | no, paid plan |
+| Base Sepolia | no, HTTP 402 | yes, although Etherscan lists it as paid |
+| Polygon PoS mainnet | no, HTTP 402 | yes |
+| Amoy | not listed | yes |
+| BNB Smart Chain, mainnet and testnet | not listed | no, paid plan |
+
+Free plans change: a source that answers today may need a paid plan later. Each provider's
+terms apply to your key, not this project's:
+
+- **Etherscan** ([API terms](https://etherscan.io/apiterms)): the free plan is for personal
+  and research use only; anywhere you display or publish data obtained through it, show
+  "Powered by Etherscan.io APIs" with a link to etherscan.io (not needed for purely private
+  use); do not bulk-download, mirror or archive its data, pass it on to third parties through
+  a proxy, or put your key in public code. `index account` prints that line under
+  transactions Etherscan listed, and every such record carries
+  `native.history_source = "etherscan"`, also in CSV, JSON and Parquet exports.
+- **Blockscout** ([terms](https://eaas.blockscout.com/terms-and-conditions)): no
+  API-specific clause on attribution or storing results was found. The licence is revocable,
+  and access or limits can change without notice.
+- **NodeReal** ([terms](https://nodereal.io/terms)): no clause on attribution, caching or
+  redistribution was found. The key sits in the endpoint URL; this project keeps it out of
+  messages and logs, but treat any URL you copy from your dashboard as a secret.
+- **Alchemy** ([terms](https://legal.alchemy.com/), version 2.0 of 27 June 2025), for Base
+  history: use is "solely for your internal business purposes" (2.1); you may not resell,
+  mirror or let others use the service (2.2(v)), scrape it or use crawlers (2.2(viii), (xi)),
+  or spread use across accounts to get past limits (2.2(x)); the free tier is "as is" and can
+  end at any time (2.11); on termination, Alchemy's confidential information must be destroyed
+  (11.6), which may include data you stored from it. No attribution or caching clause was
+  found. Each user's own key, fetching history for that user into a local database, appears
+  to fit these terms; read them yourself before relying on that.
+
+A history service is a third party: it can be behind the chain, list a transaction the RPC
+does not have yet, or change its limits. A listed transaction the RPC does not have is left
+out and fetched on a later sync.
+
+### Which transactions count
+
+`<CHAIN>_<NETWORK>_HISTORY_SCOPE` chooses them:
+
+| Scope | Keeps | Extra cost per history page |
+|---|---|---|
+| `direct` (default) | transactions the address sent or received | none |
+| `all` | also those that moved an ERC-20 (BEP-20) token to or from the address inside someone else's contract call | Blockscout and Etherscan: a second call, `tokentx`, so twice the calls (Blockscout charges 20 credits each, 40 a page); NodeReal and Alchemy: none, the same calls ask for BEP-20 or ERC-20 transfers too (250 and 120 compute units each) |
+
+Every extra transaction also costs three RPC reads (transaction, receipt, block). The block
+scan used on `localnet` lists direct transactions only. NFT transfers inside other calls are
+not added. Sync into a new database after changing the scope: stored records stay as they are.
+
 ## Post-quantum signatures
 
 Algorand transactions signed by native Falcon-1024 accounts (`pqsig`, scheme `f1`) and NEAR
@@ -411,7 +568,8 @@ runs the ones that talk to testnet. [CONTRIBUTING.md](CONTRIBUTING.md) has the r
 | 0.5 | EVM chains: Ethereum, Arbitrum, Optimism, Base, Polygon PoS, BNB Smart Chain |
 | 0.6 | Bitcoin: UTXOs, address types, fee rates, quantum-exposed outputs |
 | 0.7 | Cross-chain metrics and reports, PostgreSQL, a read-only HTTP API, follow mode, plugins, Docker |
-| 0.8 | Wallet utilities: pre-flight checks, simulation, signing on test networks first |
+| 0.8 | A local dashboard over your own database, on localhost only |
+| 0.9 | Wallet utilities: pre-flight checks, simulation, signing on test networks first |
 | 1.0 | Stable release on PyPI, with a docs page and demo per chain |
 
 ## License

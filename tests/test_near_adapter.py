@@ -873,10 +873,12 @@ def test_cli_index_contract(node: FakeNode, invoke: Any) -> None:
     assert "Global contract" in result.stdout
 
 
-def test_cli_index_contract_is_for_near_only(invoke: Any) -> None:
+def test_cli_index_contract_is_for_near_and_evm_chains_only(invoke: Any) -> None:
     result = invoke("index", "contract", ACCOUNT)
     assert result.exit_code == 1
-    assert "index contract is for near, not algorand" in result.output
+    assert (
+        "index contract is for near, ethereum, arbitrum, optimism, base, polygon, bnb, not algorand"
+    ) in result.output
 
 
 def test_cli_other_chains_lookups_are_refused_on_near(invoke: Any) -> None:

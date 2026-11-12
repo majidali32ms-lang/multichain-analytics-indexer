@@ -5,17 +5,26 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
 from multichain_indexer.core.base_indexer import BaseIndexer
 from multichain_indexer.core.errors import InvalidInput
 from multichain_indexer.core.metrics import build_report
-from multichain_indexer.core.models import MetricsReport, SyncResult, TransactionRecord
+from multichain_indexer.core.models import MetricsReport, Status, SyncResult, TransactionRecord
 from multichain_indexer.core.storage import Backfill, Storage
 
 ProgressCallback = Callable[[int], None]
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _Stored:
+    """What one sync stored: how many records the pages held, and which transactions."""
+
+    count: int = 0
+    ids: set[str] = field(default_factory=set)
 
 
 class Pipeline:
@@ -50,9 +59,10 @@ class Pipeline:
         resumed = state.backfill is not None
         backfill = state.backfill or await self._new_backfill(state.checkpoint)
 
-        fetched = 0
+        stored = _Stored()
         if backfill.from_height is None or backfill.from_height <= backfill.to_height:
-            fetched = await self._store_range(account, backfill, on_progress)
+            stored = await self._store_range(account, backfill, on_progress)
+        await self._recheck_pending(account, stored.ids)
 
         final_height = self._indexer.final_height(backfill.to_height)
         self._storage.finish_sync(self._chain, self._network, account, final_height)
@@ -63,7 +73,7 @@ class Pipeline:
             from_height=backfill.from_height,
             to_height=backfill.to_height,
             resumed=resumed,
-            records_fetched=fetched,
+            records_fetched=stored.count,
             requests_made=self._indexer.requests_made - requests_before,
             elapsed_seconds=time.monotonic() - started,
         )
@@ -74,7 +84,7 @@ class Pipeline:
 
     async def _store_range(
         self, account: str, backfill: Backfill, on_progress: ProgressCallback | None
-    ) -> int:
+    ) -> _Stored:
         try:
             return await self._store_pages(account, backfill, on_progress)
         except InvalidInput:
@@ -88,8 +98,8 @@ class Pipeline:
 
     async def _store_pages(
         self, account: str, backfill: Backfill, on_progress: ProgressCallback | None
-    ) -> int:
-        fetched = 0
+    ) -> _Stored:
+        stored = _Stored()
         pages = self._indexer.iter_account_transactions(
             account,
             from_height=backfill.from_height,
@@ -102,12 +112,35 @@ class Pipeline:
                 if page.next_cursor
                 else None
             )
-            fetched += self._storage.save_transactions(
+            stored.count += self._storage.save_transactions(
                 self._chain, self._network, account, page.records, backfill=progress
             )
+            stored.ids.update(record.id for record in page.records)
             if on_progress is not None:
-                on_progress(fetched)
-        return fetched
+                on_progress(stored.count)
+        return stored
+
+    async def _recheck_pending(self, account: str, fetched: set[str]) -> None:
+        """Ask the adapter about pending records this sync did not fetch again, and store
+        what changed, such as a transaction a reorg dropped, which becomes orphaned."""
+        stale = [
+            record
+            for record in self._storage.load_transactions(
+                self._chain,
+                self._network,
+                self._indexer.profile.transaction_model,
+                account=account,
+                status=Status.PENDING,
+            )
+            if record.id not in fetched
+        ]
+        if not stale:
+            return
+        changed = await self._indexer.recheck_pending(stale)
+        self._storage.save_transactions(self._chain, self._network, account, changed)
+        orphaned = sum(1 for record in changed if record.status is Status.ORPHANED)
+        if orphaned:
+            logger.info("pending records orphaned", extra={"account": account, "count": orphaned})
 
     def stored_transactions(
         self, *, account: str | None = None, days: int | None = None
