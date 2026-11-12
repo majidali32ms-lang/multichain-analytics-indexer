@@ -568,7 +568,8 @@ runs the ones that talk to testnet. [CONTRIBUTING.md](CONTRIBUTING.md) has the r
 | 0.5 | EVM chains: Ethereum, Arbitrum, Optimism, Base, Polygon PoS, BNB Smart Chain |
 | 0.6 | Bitcoin: UTXOs, address types, fee rates, quantum-exposed outputs |
 | 0.7 | Cross-chain metrics and reports, PostgreSQL, a read-only HTTP API, follow mode, plugins, Docker |
-| 0.8 | Wallet utilities: pre-flight checks, simulation, signing on test networks first |
+| 0.8 | A local dashboard over your own database, on localhost only |
+| 0.9 | Wallet utilities: pre-flight checks, simulation, signing on test networks first |
 | 1.0 | Stable release on PyPI, with a docs page and demo per chain |
 
 ## License
