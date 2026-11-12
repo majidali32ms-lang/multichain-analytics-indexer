@@ -18,8 +18,8 @@ from multichain_indexer import (
 )
 from multichain_indexer.adapters.evm import nodereal as nodereal_module
 from multichain_indexer.adapters.evm.adapter import indexer_factory
-from multichain_indexer.adapters.evm.nodereal import NodeRealHistory
 from multichain_indexer.adapters.evm.profiles import BNB, ETHEREUM
+from multichain_indexer.adapters.evm.transfers import TransferHistory
 from multichain_indexer.core.config import Settings
 from tests.conftest import FakeNode, Reply
 
@@ -81,10 +81,10 @@ def settings_for(node: FakeNode, tmp_path: Path, network: str = "mainnet", **env
     )
 
 
-def source_for(settings: Settings, network: str = "mainnet") -> NodeRealHistory:
+def source_for(settings: Settings, network: str = "mainnet") -> TransferHistory:
     adapter = indexer_factory(BNB)(network, settings, None)
     history = adapter._history_source()
-    assert isinstance(history, NodeRealHistory)
+    assert isinstance(history, TransferHistory)
     return history
 
 
@@ -187,7 +187,7 @@ async def test_a_transaction_to_oneself_is_listed_once(node: FakeNode, tmp_path:
     ("reply", "error", "message"),
     [
         (rpc_error(-32005, "ran out of cu"), RateLimited, "compute units"),
-        (rpc_error(-32601, "method not available"), ConfigError, "BSC mainnet only"),
+        (rpc_error(-32601, "method not available"), ConfigError, "BNB Smart Chain mainnet only"),
         (rpc_error(-32000, "range must be less than 2000000"), NetworkError, "2000000"),
         (Reply({"jsonrpc": "2.0", "id": 1, "error": "busy"}), NetworkError, "busy"),
         (rpc_ok("none"), MalformedResponse, "result object"),
@@ -229,7 +229,7 @@ async def test_cursor_from_elsewhere_is_refused(node: FakeNode, tmp_path: Path) 
 
 
 def test_bnb_mainnet_defaults_to_nodereal(node: FakeNode, tmp_path: Path) -> None:
-    assert isinstance(source_for(settings_for(node, tmp_path)), NodeRealHistory)
+    assert isinstance(source_for(settings_for(node, tmp_path)), TransferHistory)
 
 
 def test_missing_key_names_the_setting(node: FakeNode, tmp_path: Path) -> None:
