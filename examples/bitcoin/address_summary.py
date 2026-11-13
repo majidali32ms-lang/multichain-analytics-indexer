@@ -24,6 +24,7 @@ def summarise(address: str, database: Path) -> None:
 
         print(f"Balance: {indexer.profile.format_native(account.balance)}")
         print(f"Type: {account.native.address_type}, UTXOs: {account.native.utxo_count}")
+        print(f"Quantum exposure: {account.native.quantum_exposure.status}")
         print(f"Stored {result.records_fetched} transactions in {result.requests_made} requests")
         print(f"Transactions in the last {WINDOW_DAYS} days: {report.transactions}")
         print(f"Fees: {report.native['fees_sats']} sats ({report.native['fees_btc']} BTC)")

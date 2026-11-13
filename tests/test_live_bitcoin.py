@@ -61,6 +61,8 @@ def test_an_address_and_its_transactions(tmp_path: Path) -> None:
     assert isinstance(account.native, BitcoinAddress)
     assert account.native.address_type == "p2pkh"
     assert account.native.transactions >= 4
+    assert account.native.quantum_exposure.status == "exposed"
+    assert account.native.quantum_exposure.as_of_height >= result.to_height - 1
     assert result.records_fetched == len(stored) >= 4
     assert all(SMALL in _parties(record.native) for record in stored)
 
@@ -83,6 +85,7 @@ def test_a_p2pk_public_key_on_mainnet(tmp_path: Path) -> None:
     assert isinstance(account.native, BitcoinAddress)
     assert account.native.address_type == "p2pk"
     assert account.native.received_outputs >= 6
+    assert account.native.quantum_exposure.status == "exposed"
 
 
 def _parties(native: object) -> set[str | None]:

@@ -533,16 +533,16 @@ multichain-indexer --chain bitcoin export --format csv --output transactions.csv
 ```
 
 ```text
-Address       mgdKMwnT4S5gbx55Uw3tRJchUSrHwAFjzu
-Type          P2PKH
-Balance       0.03571478 BTC
-Unconfirmed   +0 sats
-UTXOs         2
-Transactions  4
-Key revealed  yes
+Address           mgdKMwnT4S5gbx55Uw3tRJchUSrHwAFjzu
+Type              P2PKH
+Balance           0.03571478 BTC
+Unconfirmed       +0 sats
+UTXOs             2
+Transactions      4
+Quantum exposure  exposed: 2 confirmed UTXOs, 0.03571478 BTC; a confirmed spend revealed the public key (as of query time, from Esplora, height 161120)
 
-2026-11-13 16:56  c6f15b762eb44dbe10f2625bb4ddaec9ce1f11aa324aca2df9a530ac11a150a0  20 confirmations, block 161097  0.03561478 BTC  522 sats  1.01 sat/vB  519 vB, 2076 WU  3 in, 2 out  no
-2026-11-13 15:12  48b9226d71084b95bd93baac5f33fc1bd4da2d3e4a93c92ca5c4a19901cac7ff  29 confirmations, block 161088  49.820251 BTC  294 sats  2.01 sat/vB  147 vB, 585 WU  1 in, 2 out  yes
+2026-11-13 16:56  c6f15b762eb44dbe10f2625bb4ddaec9ce1f11aa324aca2df9a530ac11a150a0  24 confirmations, block 161097  0.03561478 BTC  522 sats  1.01 sat/vB  519 vB, 2076 WU  3 in, 2 out  no
+2026-11-13 15:12  48b9226d71084b95bd93baac5f33fc1bd4da2d3e4a93c92ca5c4a19901cac7ff  33 confirmations, block 161088  49.820251 BTC  294 sats  2.01 sat/vB  147 vB, 585 WU  1 in, 2 out  yes
 ```
 
 ```text
@@ -580,11 +580,42 @@ size, RBF signalling, SegWit and Taproot use, coinbase, block and confirmations.
 - A P2PK output has no address: give its public key in hex, which is also how such inputs
   and outputs are shown.
 
+### Quantum-exposed outputs
+
+`index address`, and `Indexer.account()` as `native.quantum_exposure`, say whether the
+address's confirmed unspent outputs show a public key on chain, which is what Shor's
+algorithm needs; a hash of a key is not enough. It is per address, as of query time, from
+Esplora's totals for the address, and it names the height it was read at.
+
+| Address type | Status | When |
+|---|---|---|
+| P2PK | exposed | Always: the output holds the public key. |
+| P2TR | exposed | Always: the output key is a public key that can spend by the key path (BIP-341). |
+| P2PKH, P2WPKH | exposed | Once the address has spent in a confirmed block (`chain_stats.spent_txo_count` above 0): the spend showed the key, and every output of the address shares it. |
+| P2PKH, P2WPKH | not exposed | No confirmed spend yet: only a hash of the key is on chain. |
+| P2SH, P2WSH | script revealed | Once the address has spent in a confirmed block: the spend showed the script. Whether that script holds public keys is not read, so it is not called exposed. |
+| P2SH, P2WSH | not exposed | No confirmed spend yet. |
+
+Limits:
+
+- It is per address, as of query time, from Esplora: the answer can change with the next
+  block, and it is only as right as the server.
+- Only confirmed outputs count. A spend still in the mempool has already shown the key, but
+  it counts once confirmed; the mempool's effect on the balance is shown apart.
+- It covers the address you ask about, not the whole UTXO set, and not other addresses that
+  share a key with it (the same key behind a P2PKH and a P2WPKH address, for example).
+- A key shown anywhere else, such as in a P2SH script, an xpub or a message signature, is not
+  seen.
+- "script revealed" does not say whether the script's keys can be attacked; read the script.
+- It reports exposure by this rule only. It is not a statement about when a quantum computer
+  could break a key, and nothing on Bitcoin is post-quantum yet (`pq-status`).
+
 ## Post-quantum signatures
 
 Algorand transactions signed by native Falcon-1024 accounts (`pqsig`, scheme `f1`) and NEAR
 keys and transactions using ML-DSA-65 carry a `pq` field in their `native` block, and metrics
-report their share. Nothing else is live on any planned chain yet.
+report their share. Nothing else is live on any planned chain yet. For Bitcoin, `index address`
+reports whether an address's outputs are [quantum-exposed](#quantum-exposed-outputs).
 
 ```bash
 multichain-indexer pq-status

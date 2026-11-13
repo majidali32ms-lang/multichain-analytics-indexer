@@ -50,10 +50,11 @@ does; its `pq.evidence` says how many.
 deployed on any public cluster. There is no detector until a deployed official program
 exists.
 
-**EVM chains and Bitcoin.** Nothing is live. Phase 4 (EVM) and Phase 5 (Bitcoin) use the same
-framework. Bitcoin will also report "quantum-exposed outputs": unspent outputs whose public
-key is already on chain, which BIP-341 and BIP-360 describe. P2PK and P2TR outputs carry the
-key in the output; P2PKH, P2WPKH, P2SH and P2WSH reveal it once spent.
+**EVM chains and Bitcoin.** Nothing is live. Bitcoin also reports, per address, whether its
+confirmed unspent outputs are quantum-exposed: P2PK and P2TR by script type; P2PKH and P2WPKH
+once the address has spent in a confirmed block; P2SH and P2WSH show "script revealed" once
+spent. The [Bitcoin page](chains/bitcoin.md#quantum-exposed-outputs) has the rule and its
+limits.
 
 ## Where it shows
 

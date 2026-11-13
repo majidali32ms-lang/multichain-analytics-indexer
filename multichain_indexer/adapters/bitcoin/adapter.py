@@ -15,6 +15,7 @@ from typing import cast
 from pydantic import JsonValue
 
 from multichain_indexer.adapters.bitcoin.esplora import SOURCE_NAME, create_esplora_source
+from multichain_indexer.adapters.bitcoin.exposure import quantum_exposure
 from multichain_indexer.adapters.bitcoin.history import (
     BitcoinSource,
     BitcoinSourceFactory,
@@ -22,7 +23,11 @@ from multichain_indexer.adapters.bitcoin.history import (
     SourceTransaction,
 )
 from multichain_indexer.adapters.bitcoin.metrics import SATS_DECIMALS, bitcoin_metrics
-from multichain_indexer.adapters.bitcoin.models import BitcoinAddress, BitcoinTransaction
+from multichain_indexer.adapters.bitcoin.models import (
+    BitcoinAddress,
+    BitcoinTransaction,
+    QuantumExposure,
+)
 from multichain_indexer.adapters.bitcoin.networks import (
     KNOWN_GENESIS,
     NETWORKS,
@@ -80,6 +85,7 @@ class BitcoinIndexer(BaseIndexer):
         locator = parse_locator(address, self._network)
         await self._require_network()
         activity = await self._source.script_activity(locator)
+        tip = await self._refresh_tip()
         confirmed, mempool = activity.confirmed, activity.mempool
         return AccountRecord(
             address=locator.text,
@@ -95,6 +101,9 @@ class BitcoinIndexer(BaseIndexer):
                 spent_outputs=confirmed.spent_count + mempool.spent_count,
                 unconfirmed_change=mempool.funded_sum - mempool.spent_sum,
                 mempool_transactions=mempool.tx_count,
+                quantum_exposure=quantum_exposure(
+                    locator.script_type, confirmed, as_of_height=tip, source=self._source.name
+                ),
                 history_source=self._source.name,
             ),
         )
@@ -294,12 +303,14 @@ def _describe_address(record: AccountRecord) -> dict[str, str]:
         "Unconfirmed": f"{native.unconfirmed_change:+} sats",
         "UTXOs": str(native.utxo_count),
         "Transactions": str(native.transactions),
-        "Key revealed": "yes" if _key_revealed(native) else "no",
+        "Quantum exposure": _exposure_text(native.quantum_exposure),
     }
 
 
-def _key_revealed(native: BitcoinAddress) -> bool:
-    return native.address_type in ("p2pk", "p2tr") or native.spent_outputs > 0
+def _exposure_text(exposure: QuantumExposure) -> str:
+    held = f"{exposure.utxo_count} confirmed UTXOs, {PROFILE.format_native(exposure.utxo_value)}"
+    when = f"as of query time, from {exposure.source.capitalize()}, height {exposure.as_of_height}"
+    return f"{exposure.status}: {held}; {exposure.reason} ({when})"
 
 
 def _confirmation_text(native: BitcoinTransaction) -> str:

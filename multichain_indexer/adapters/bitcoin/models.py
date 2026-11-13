@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import Field
+from pydantic import AwareDatetime, Field
 
 from multichain_indexer.core.models import NativeData
 
@@ -63,12 +63,30 @@ class BitcoinTransaction(NativeData):
     history_source: str
 
 
+class QuantumExposure(NativeData):
+    """Whether an address's confirmed unspent outputs show a public key, by the rule in
+    ``exposure.py``. It holds as of the query: ``as_of_height`` and ``observed_at`` say when,
+    ``source`` where from.
+
+    ``status`` is ``exposed``, ``script revealed`` (P2SH or P2WSH after a spend) or
+    ``not exposed``.
+    """
+
+    status: str
+    reason: str
+    utxo_count: int = Field(ge=0)
+    utxo_value: int = Field(ge=0)
+    as_of_height: int = Field(ge=0)
+    observed_at: AwareDatetime
+    source: str
+
+
 class BitcoinAddress(NativeData):
     """An address or P2PK public key: what it holds and whether its key is on chain.
 
     ``utxo_count`` and the record's balance cover confirmed outputs; the mempool's effect
-    is in ``unconfirmed_change`` and ``mempool_transactions``. ``spent_outputs`` above zero
-    means a spend has revealed the key or script behind the address.
+    is in ``unconfirmed_change`` and ``mempool_transactions``. ``spent_outputs`` counts
+    confirmed and unconfirmed spends.
     """
 
     address_type: str
@@ -79,4 +97,5 @@ class BitcoinAddress(NativeData):
     spent_outputs: int = Field(ge=0)
     unconfirmed_change: int
     mempool_transactions: int = Field(ge=0)
+    quantum_exposure: QuantumExposure
     history_source: str

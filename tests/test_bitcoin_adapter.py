@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC
 from typing import Any
 
 import pytest
@@ -18,6 +19,8 @@ from multichain_indexer import (
 from multichain_indexer.adapters.bitcoin import BitcoinIndexer, create_indexer
 from multichain_indexer.adapters.bitcoin import adapter as adapter_module
 from multichain_indexer.adapters.bitcoin.esplora import create_esplora_source
+from multichain_indexer.adapters.bitcoin.exposure import quantum_exposure
+from multichain_indexer.adapters.bitcoin.history import OutputTotals
 from multichain_indexer.adapters.bitcoin.models import BitcoinAddress, BitcoinTransaction
 from multichain_indexer.adapters.bitcoin.networks import NETWORKS
 from multichain_indexer.core.config import Settings
@@ -520,3 +523,70 @@ def test_a_chain_that_cannot_read_one_transaction_says_so(settings: Settings) ->
         pytest.raises(UnsupportedChain, match="cannot look up a single transaction"),
     ):
         indexer.transaction("x")
+
+
+SPENT = OutputTotals(funded_count=3, funded_sum=9_000, spent_count=1, spent_sum=4_000, tx_count=3)
+UNSPENT = OutputTotals(funded_count=2, funded_sum=5_000, spent_count=0, spent_sum=0, tx_count=2)
+
+
+@pytest.mark.parametrize(
+    ("address_type", "totals", "status"),
+    [
+        ("p2pk", UNSPENT, "exposed"),
+        ("p2tr", UNSPENT, "exposed"),
+        ("p2tr", SPENT, "exposed"),
+        ("p2pkh", UNSPENT, "not exposed"),
+        ("p2pkh", SPENT, "exposed"),
+        ("p2wpkh", UNSPENT, "not exposed"),
+        ("p2wpkh", SPENT, "exposed"),
+        ("p2sh", UNSPENT, "not exposed"),
+        ("p2sh", SPENT, "script revealed"),
+        ("p2wsh", UNSPENT, "not exposed"),
+        ("p2wsh", SPENT, "script revealed"),
+    ],
+)
+def test_the_exposure_rule_by_address_type_and_confirmed_spends(
+    address_type: str, totals: OutputTotals, status: str
+) -> None:
+    exposure = quantum_exposure(address_type, totals, as_of_height=TIP, source="esplora")
+    assert exposure.status == status
+    assert exposure.utxo_count == totals.funded_count - totals.spent_count
+    assert exposure.utxo_value == totals.funded_sum - totals.spent_sum
+    assert exposure.as_of_height == TIP
+    assert exposure.observed_at.tzinfo is UTC
+
+
+async def test_a_spend_still_in_the_mempool_does_not_expose_yet(
+    node: FakeNode, adapter: BitcoinIndexer
+) -> None:
+    serve_chain(node)
+    stats = fixture("testnet4_scripthash_small")
+    stats["chain_stats"].update(spent_txo_count=0, spent_txo_sum=0)
+    stats["mempool_stats"].update(spent_txo_count=1, spent_txo_sum=1_000, tx_count=1)
+    node.routes[script_path(SMALL)] = Reply(stats)
+    record = await adapter.fetch_account(SMALL)
+    native = record.native
+    assert isinstance(native, BitcoinAddress)
+    assert native.quantum_exposure.status == "not exposed"
+    assert native.quantum_exposure.utxo_count == stats["chain_stats"]["funded_txo_count"]
+    assert native.unconfirmed_change == -1_000
+
+
+async def test_exposure_of_a_taproot_address_is_read_at_the_tip(
+    node: FakeNode, adapter: BitcoinIndexer
+) -> None:
+    taproot = next(
+        out["scriptpubkey_address"]
+        for out in fixture("tx_taproot")["vout"]
+        if out["scriptpubkey_type"] == "v1_p2tr"
+    )
+    serve_chain(node, tip=TIP + 3)
+    node.routes[script_path(taproot)] = Reply(fixture("testnet4_scripthash_small"))
+    record = await adapter.fetch_account(taproot)
+    native = record.native
+    assert isinstance(native, BitcoinAddress)
+    assert native.quantum_exposure.status == "exposed"
+    assert native.quantum_exposure.as_of_height == TIP + 3
+    assert adapter.describe(record)["Quantum exposure"].startswith(
+        "exposed: 2 confirmed UTXOs, 0.03571478 BTC; the public key is in every P2TR output"
+    )

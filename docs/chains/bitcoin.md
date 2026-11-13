@@ -132,6 +132,44 @@ The `native` block adds:
 `index address` shows the UTXO count and balance from the server's totals for the address:
 outputs received minus outputs spent, confirmed only, with the mempool's effect shown apart.
 
+## Quantum-exposed outputs
+
+Shor's algorithm needs a public key; a hash of one is not enough. `index address`, and
+`Indexer.account()` as `native.quantum_exposure`, say whether the address's confirmed
+unspent outputs show a public key on chain. It is worked out per address, as of query time,
+from Esplora's confirmed totals for the address (`chain_stats`), with the height it was read
+at, the time and the source:
+
+```text
+Quantum exposure  exposed: 2 confirmed UTXOs, 0.03571478 BTC; a confirmed spend revealed the public key (as of query time, from Esplora, height 161120)
+```
+
+| Address type | Status | When |
+|---|---|---|
+| P2PK | exposed | Always: the output holds the public key. |
+| P2TR | exposed | Always: the output key is a public key that can spend by the key path (BIP-341). |
+| P2PKH, P2WPKH | exposed | Once the address has spent in a confirmed block (`chain_stats.spent_txo_count` above 0): the spend showed the key, and every output of the address shares it. |
+| P2PKH, P2WPKH | not exposed | No confirmed spend yet: only a hash of the key is on chain. |
+| P2SH, P2WSH | script revealed | Once the address has spent in a confirmed block: the spend showed the script. Whether that script holds public keys is not read, so it is not called exposed. |
+| P2SH, P2WSH | not exposed | No confirmed spend yet. |
+
+`utxo_count` and `utxo_value` are the address's confirmed outputs not yet spent, whatever the
+status. The same rule is in `adapters/bitcoin/exposure.py`.
+
+### Limits of the rule
+
+- It is per address, as of query time, from Esplora: the answer can change with the next
+  block, and it is only as right as the server.
+- Only confirmed outputs count. A spend still in the mempool has already shown the key, but
+  it counts once confirmed; the mempool's effect on the balance is shown apart.
+- It covers the address you ask about, not the whole UTXO set, and not other addresses that
+  share a key with it (the same key behind a P2PKH and a P2WPKH address, for example).
+- A key shown anywhere else, such as in a P2SH script, an xpub or a message signature, is not
+  seen.
+- "script revealed" does not say whether the script's keys can be attacked; read the script.
+- It reports exposure by this rule only. It is not a statement about when a quantum computer
+  could break a key, and nothing on Bitcoin is post-quantum yet (`pq-status`).
+
 ## Limits
 
 - Esplora lists at most 50 unconfirmed transactions for a script.

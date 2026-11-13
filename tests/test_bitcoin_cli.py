@@ -32,8 +32,12 @@ def test_cli_index_address_shows_btc_utxos_and_recent_txids(
     serve_small(node)
     result = run_cli(btc_settings, "index", "address", SMALL, "--limit", "2")
     assert result.exit_code == 0, result.output
-    assert "Balance       0.03571478 BTC" in result.output
-    assert "UTXOs         2" in result.output
+    assert "Balance           0.03571478 BTC" in result.output
+    assert "UTXOs             2" in result.output
+    assert (
+        "Quantum exposure  exposed: 2 confirmed UTXOs, 0.03571478 BTC; a confirmed spend "
+        "revealed the public key (as of query time, from Esplora, height 161111)"
+    ) in result.output
     lines = result.output.strip().splitlines()
     assert lines[-1].split("  ")[1] == fixture("testnet4_scripthash_small_chain")[1]["txid"]
     assert len(lines) == 7 + 1 + 2
