@@ -9,8 +9,9 @@ A Python library and command line for indexing and analysing blockchain accounts
 transactions, in each chain's own terms. It keeps what it reads in a local database,
 syncs incrementally, and produces metrics and exports for analysis.
 
-This version supports **Algorand**, **Solana** and **NEAR**. See the [roadmap](#roadmap) for
-what comes next.
+This version supports **Algorand**, **Solana**, **NEAR**, the **EVM chains** (Ethereum,
+Arbitrum, OP Mainnet, Base, Polygon PoS, BNB Smart Chain) and **Bitcoin**. See the
+[roadmap](#roadmap) for what comes next.
 
 ## Install
 
@@ -487,6 +488,98 @@ Every extra transaction also costs three RPC reads (transaction, receipt, block)
 scan used on `localnet` lists direct transactions only. NFT transfers inside other calls are
 not added. Sync into a new database after changing the scope: stored records stay as they are.
 
+## Bitcoin
+
+Bitcoin is read from an Esplora REST API: mempool.space's public servers by default, at one
+request a second, or your own Esplora or mempool server. Addresses of the five standard
+types (P2PKH, P2SH, P2WPKH, P2WSH, P2TR) and P2PK public keys are read with embit and
+checked against the network before any request; the server's genesis block is checked
+before the first one.
+
+| `--network` | Esplora server |
+|---|---|
+| `testnet4` | The default: `https://mempool.space/testnet4/api` |
+| `signet` | `https://mempool.space/signet/api` |
+| `mainnet` | `https://mempool.space/api`, only when asked for |
+| `localnet` | A regtest node's Esplora at `http://localhost:3002` |
+
+Set `BITCOIN_<NETWORK>_ESPLORA_SERVER` in `.env` to use your own server.
+`BITCOIN_<NETWORK>_HISTORY_SOURCE` chooses the source; Esplora is the only one so far, and a
+Bitcoin Core node is planned as the second. mempool.space states no request limit and warns
+of bans for heavy use, so run your own server for more than a few addresses.
+[The Bitcoin page](https://majidali32ms-lang.github.io/multichain-analytics-indexer/chains/bitcoin/)
+has the measured rates, every field and the limits.
+
+### Commands
+
+```bash
+multichain-indexer --chain bitcoin index address <address-or-public-key>
+```
+
+```bash
+multichain-indexer --chain bitcoin index tx <txid>
+```
+
+```bash
+multichain-indexer --chain bitcoin sync <address>
+```
+
+```bash
+multichain-indexer --chain bitcoin metrics --days 30
+```
+
+```bash
+multichain-indexer --chain bitcoin export --format csv --output transactions.csv
+```
+
+```text
+Address       mgdKMwnT4S5gbx55Uw3tRJchUSrHwAFjzu
+Type          P2PKH
+Balance       0.03571478 BTC
+Unconfirmed   +0 sats
+UTXOs         2
+Transactions  4
+Key revealed  yes
+
+2026-11-13 16:56  c6f15b762eb44dbe10f2625bb4ddaec9ce1f11aa324aca2df9a530ac11a150a0  20 confirmations, block 161097  0.03561478 BTC  522 sats  1.01 sat/vB  519 vB, 2076 WU  3 in, 2 out  no
+2026-11-13 15:12  48b9226d71084b95bd93baac5f33fc1bd4da2d3e4a93c92ca5c4a19901cac7ff  29 confirmations, block 161088  49.820251 BTC  294 sats  2.01 sat/vB  147 vB, 585 WU  1 in, 2 out  yes
+```
+
+```text
+Txid                23246681e815c1cc7f70a04f2feed025a9c3d6335aa3a4bcb8ba89692355296b
+Time                2026-11-13 16:02 UTC
+Sender              tb1pqhrrvztxyz09zcj89pxvu9jg3ltcfw3qs54hjpjc74gm6k38k4uqrpm3x5
+Receiver            tb1p93kgv2ye3axwqph8l8s5nxm9sccn28vffmm9vs44utcuuztljfus2v8e5q
+Status              19 confirmations, block 161098
+Amount              87.30535694 BTC
+Fee                 310 sats
+Fee rate            2.01 sat/vB
+Size                154 vB, 616 WU
+Inputs and outputs  1 in, 2 out
+RBF                 yes
+```
+
+```text
+Synced mgdKMwnT4S5gbx55Uw3tRJchUSrHwAFjzu on bitcoin testnet4: 4 transactions up to height 161116, 5 requests in 4.1s
+```
+
+### What is recorded
+
+The `native` block holds every input, with the output it spends, and every output, each with
+its address, script type and value in sats, plus version, locktime, size, weight, virtual
+size, RBF signalling, SegWit and Taproot use, coinbase, block and confirmations.
+
+- `fee` is inputs minus outputs, in sats, and must equal what the server reports.
+- `fee_rate` is in sat/vB over the weight divided by four, the rate mempool.space shows.
+  The fee and fee rate of every saved test transaction match mempool.space's page for it.
+- `sender` is the address of the input spending the most sats, `coinbase` for a coinbase.
+- `receiver` and `amount` are the largest output paying an address no input spends from, so
+  change back to the sender is skipped; with only change, the largest output.
+- A transaction is `final` from six confirmations. A pending one whose block leaves the best
+  chain, or that leaves the mempool, becomes `orphaned`.
+- A P2PK output has no address: give its public key in hex, which is also how such inputs
+  and outputs are shown.
+
 ## Post-quantum signatures
 
 Algorand transactions signed by native Falcon-1024 accounts (`pqsig`, scheme `f1`) and NEAR
@@ -522,6 +615,8 @@ multichain_indexer/
   adapters/algorand/  client, parser, metrics
   adapters/solana/    client, parser, metrics
   adapters/near/      client, parser, metrics, and pluggable history sources
+  adapters/evm/       one adapter, a profile per chain, and pluggable history sources
+  adapters/bitcoin/   Esplora source, parser, metrics; imports only core/
   pq/                 post-quantum detection shared by the adapters, and each chain's status
 ```
 

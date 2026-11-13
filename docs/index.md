@@ -3,8 +3,8 @@
 A Python library and command line for indexing and analysing blockchain accounts and
 transactions, in each chain's own terms.
 
-This version supports [Algorand](chains/algorand.md), [Solana](chains/solana.md) and
-[NEAR](chains/near.md). It also reports which chains, accounts and transactions use
+This version supports [Algorand](chains/algorand.md), [Solana](chains/solana.md),
+[NEAR](chains/near.md), the [EVM chains](chains/evm.md) and [Bitcoin](chains/bitcoin.md). It also reports which chains, accounts and transactions use
 [post-quantum signatures](post-quantum.md).
 
 ## Install

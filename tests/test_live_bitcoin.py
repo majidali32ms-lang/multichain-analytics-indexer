@@ -3,9 +3,13 @@
 
 from __future__ import annotations
 
+import runpy
+import sys
 from pathlib import Path
 
+import nbformat
 import pytest
+from nbclient import NotebookClient
 from pydantic import SecretStr
 
 from multichain_indexer import Indexer, WrongNetwork
@@ -16,6 +20,7 @@ from multichain_indexer.core.registry import create_indexer
 
 pytestmark = pytest.mark.live
 
+EXAMPLES = Path(__file__).parent.parent / "examples" / "bitcoin"
 # A small testnet4 P2PKH address: four transactions on 2026-11-13.
 SMALL = "mgdKMwnT4S5gbx55Uw3tRJchUSrHwAFjzu"
 # A testnet4 transaction spending a P2TR output; mempool.space showed 310 sats, 2.01 sat/vB.
@@ -83,3 +88,16 @@ def test_a_p2pk_public_key_on_mainnet(tmp_path: Path) -> None:
 def _parties(native: object) -> set[str | None]:
     assert isinstance(native, BitcoinTransaction)
     return {entry.address for entry in native.inputs} | {out.address for out in native.outputs}
+
+
+def test_example_script_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys, "argv", ["address_summary.py"])
+    runpy.run_path(str(EXAMPLES / "address_summary.py"), run_name="__main__")
+
+
+# pyzmq warns about Windows' default event loop when the notebook kernel starts; it is not this
+# project's warning, and the notebook still runs.
+@pytest.mark.filterwarnings("ignore:Proactor event loop:RuntimeWarning")
+def test_example_notebook_runs() -> None:
+    notebook = nbformat.read(EXAMPLES / "address_analysis.ipynb", as_version=4)
+    NotebookClient(notebook, timeout=300, kernel_name="python3").execute()
