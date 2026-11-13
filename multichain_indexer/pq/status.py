@@ -31,6 +31,7 @@ class ChainPqStatus:
 
 CHECKED_ON = "2026-11-08"
 EVM_CHECKED_ON = "2026-11-09"
+BITCOIN_CHECKED_ON = "2026-11-13"
 
 PQ_STATUS: tuple[ChainPqStatus, ...] = (
     ChainPqStatus(
@@ -186,8 +187,12 @@ PQ_STATUS: tuple[ChainPqStatus, ...] = (
         scheme=None,
         since="",
         detected=False,
-        note="BIP-360 (P2MR) and BIP-361 are drafts; nothing is activated.",
+        note=(
+            "BIP-360 (P2MR, a witness v2 output with no key path) and BIP-361 (migration "
+            "and legacy signature sunset) are drafts with no activation parameters; no "
+            "post-quantum signature BIP exists, and Bitcoin Core 32.1 adds none."
+        ),
         source="https://github.com/bitcoin/bips/blob/master/bip-0360.mediawiki",
-        checked_on=CHECKED_ON,
+        checked_on=BITCOIN_CHECKED_ON,
     ),
 )
