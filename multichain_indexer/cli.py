@@ -92,10 +92,10 @@ def _with_indexer(
 )
 @click.option(
     "--network",
-    type=click.Choice(["mainnet", "testnet", "devnet", "localnet"]),
+    type=click.Choice(["mainnet", "testnet", "devnet", "testnet4", "signet", "localnet"]),
     help=(
-        "Network to read. Defaults to Algorand testnet, Solana devnet, NEAR testnet, or the "
-        "EVM chain's testnet, such as Sepolia."
+        "Network to read. Defaults to Algorand testnet, Solana devnet, NEAR testnet, the "
+        "EVM chain's testnet, such as Sepolia, or Bitcoin testnet4."
     ),
 )
 @click.option("--db", "database", type=click.Path(dir_okay=False, path_type=Path))
@@ -123,7 +123,8 @@ def cli(
 
 @cli.group()
 def index() -> None:
-    """Look up one account, Algorand ASA or app, Solana SPL token or program, or contract."""
+    """Look up one account, Algorand ASA or app, Solana SPL token or program, or contract,
+    or one Bitcoin address or transaction."""
 
 
 @index.command("account")
@@ -146,6 +147,46 @@ def index_account(indexer: Indexer, address: str, limit: int) -> None:
         click.echo(_transaction_line(indexer, record))
     for line in _attributions(records):
         click.echo(line)
+
+
+@index.command("address")
+@click.argument("address")
+@click.option(
+    "--limit",
+    type=click.IntRange(min=1),
+    default=DEFAULT_RECENT_TRANSACTIONS,
+    show_default=True,
+    help="Recent transactions to show.",
+)
+@click.pass_obj
+@_with_indexer
+def index_address(indexer: Indexer, address: str, limit: int) -> None:
+    """Show a Bitcoin address or P2PK public key: balance in BTC, UTXOs and recent txids."""
+    _require_chain(indexer, "bitcoin", "index address")
+    _echo_fields(indexer.describe(indexer.account(address)))
+    click.echo()
+    for record in indexer.account_transactions(address, limit=limit):
+        click.echo(_transaction_line(indexer, record))
+
+
+@index.command("tx")
+@click.argument("txid")
+@click.pass_obj
+@_with_indexer
+def index_tx(indexer: Indexer, txid: str) -> None:
+    """Show one Bitcoin transaction by its txid: fee in sats, fee rate in sat/vB, inputs and
+    outputs."""
+    _require_chain(indexer, "bitcoin", "index tx")
+    record = indexer.transaction(txid)
+    _echo_fields(
+        {
+            "Txid": record.id,
+            "Time": record.time.strftime("%Y-%m-%d %H:%M UTC"),
+            "Sender": record.sender,
+            "Receiver": record.receiver or "none",
+            **indexer.describe(record),
+        }
+    )
 
 
 @index.command("asset")

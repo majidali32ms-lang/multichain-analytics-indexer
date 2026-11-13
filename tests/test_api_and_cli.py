@@ -231,6 +231,7 @@ def test_cli_export_to_stdout_and_file(node: FakeNode, invoke: Invoke, tmp_path:
         (("index", "asset", "abc"), "ASA ID"),
         (("index", "app", "0"), "app ID"),
         (("sync", "BAD"), "not a valid Algorand address"),
+        (("--chain", "bitcoin", "index", "tx", "abc"), "not a txid"),
         (("export", "--format", "parquet"), "--output"),
     ],
 )
