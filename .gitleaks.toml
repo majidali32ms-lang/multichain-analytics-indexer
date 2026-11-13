@@ -12,4 +12,7 @@ regexes = [
     # NodeReal's paging cursor, base64 of the category, block and position it stopped at, such
     # as "external:133012680_1062739," (tests/fixtures/evm/history_bsc_nodereal.json).
     '''"pageKey": "''',
+    # The output scripts of Bitcoin transactions, hex as Esplora returns them, such as
+    # "0014fcb55e69..." for a P2WPKH output (tests/fixtures/bitcoin/).
+    '''"scriptpubkey(_asm|_address|_type)?": "''',
 ]
