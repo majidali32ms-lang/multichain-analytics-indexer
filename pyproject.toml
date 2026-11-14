@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "multichain-analytics-indexer"
-version = "0.5.0"
+version = "0.6.0"
 description = "Index and analyse blockchain accounts and transactions, in each chain's own terms."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 authors = [{ name = "Majid Khan" }]
 license-files = ["LICENSE"]
-keywords = ["algorand", "solana", "near", "ethereum", "evm", "blockchain", "indexer", "analytics"]
+keywords = ["algorand", "solana", "near", "ethereum", "evm", "bitcoin", "blockchain", "indexer", "analytics"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -28,6 +28,7 @@ dependencies = [
     "aiohttp>=3.11,<4",
     "base58>=2.1,<3",
     "click>=8.1,<9",
+    "embit==0.8.0",
     "pandas>=2.2,<4",
     "py-algorand-sdk>=2.12,<3",
     "pyarrow>=18",
@@ -99,5 +100,5 @@ packages = ["multichain_indexer"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["algosdk.*", "pandas.*"]
+module = ["algosdk.*", "embit.*", "pandas.*"]
 ignore_missing_imports = true

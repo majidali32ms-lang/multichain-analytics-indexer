@@ -15,13 +15,13 @@ import threading
 from collections.abc import Callable, Coroutine
 from pathlib import Path
 from types import TracebackType
-from typing import Self, TypeVar
+from typing import Protocol, Self, TypeVar, runtime_checkable
 
 import multichain_indexer.adapters  # noqa: F401  (registers the built-in chains)
 from multichain_indexer.core.base_indexer import ChainProfile
 from multichain_indexer.core.cache import ResponseCache
 from multichain_indexer.core.config import Settings
-from multichain_indexer.core.errors import InvalidInput
+from multichain_indexer.core.errors import InvalidInput, UnsupportedChain
 from multichain_indexer.core.export import export_transactions
 from multichain_indexer.core.models import (
     AccountRecord,
@@ -38,6 +38,13 @@ from multichain_indexer.core.storage import SQLiteStorage
 DEFAULT_TRANSACTION_LIMIT = 20
 _T = TypeVar("_T")
 Describable = TransactionRecord | AccountRecord | AssetRecord | ContractRecord
+
+
+@runtime_checkable
+class _TransactionLookup(Protocol):
+    """An adapter that can read one transaction by its ID."""
+
+    async def fetch_transaction(self, transaction_id: str, /) -> TransactionRecord: ...
 
 
 class AsyncIndexer:
@@ -94,6 +101,18 @@ class AsyncIndexer:
             if len(collected) >= limit:
                 break
         return collected[:limit]
+
+    async def transaction(self, transaction_id: str) -> TransactionRecord:
+        """Fetch one transaction by its ID, such as a Bitcoin txid. Nothing is stored.
+
+        Raises:
+            UnsupportedChain: The chain's adapter cannot look up a single transaction.
+        """
+        if not isinstance(self._indexer, _TransactionLookup):
+            raise UnsupportedChain(
+                f"{self.profile.name} cannot look up a single transaction by its ID"
+            )
+        return await self._indexer.fetch_transaction(transaction_id)
 
     async def asset(self, asset_id: str | int) -> AssetRecord:
         """Fetch a token or asset, such as an Algorand ASA, and store it."""
@@ -235,6 +254,10 @@ class Indexer:
     ) -> list[TransactionRecord]:
         """See ``AsyncIndexer.account_transactions``."""
         return self._thread.run(self._inner.account_transactions(address, limit=limit))
+
+    def transaction(self, transaction_id: str) -> TransactionRecord:
+        """See ``AsyncIndexer.transaction``."""
+        return self._thread.run(self._inner.transaction(transaction_id))
 
     def asset(self, asset_id: str | int) -> AssetRecord:
         """See ``AsyncIndexer.asset``."""

@@ -29,6 +29,8 @@ click==8.5.0
     # via multichain-analytics-indexer
 cytoolz==1.2.0 ; implementation_name == 'cpython'
     # via eth-utils
+embit==0.8.0
+    # via multichain-analytics-indexer
 eth-abi==6.0.0
     # via
     #   eth-account

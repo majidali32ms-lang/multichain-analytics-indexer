@@ -10,9 +10,9 @@ import asyncio
 import hashlib
 import json
 import logging
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, TypeVar
 
 import aiohttp
 from pydantic import JsonValue, SecretStr
@@ -28,6 +28,7 @@ from multichain_indexer.core.ratelimit import RateLimiter
 
 JsonObject = dict[str, JsonValue]
 QueryParams = Mapping[str, str | int]
+_Decoded = TypeVar("_Decoded")
 
 HTTP_OK = 200
 HTTP_NOT_FOUND = 404
@@ -97,7 +98,23 @@ class ApiClient:
             MalformedResponse: The body is not a JSON object.
         """
         query = dict(params or {})
-        return await self._cached_request("GET", path, query, None, immutable=immutable)
+        return await self._cached_request(
+            "GET", path, query, None, immutable=immutable, decode=_decode_object
+        )
+
+    async def get_json_value(
+        self, path: str, params: QueryParams | None = None, *, immutable: bool = False
+    ) -> JsonValue:
+        """GET ``path`` and return the decoded JSON value, whatever its type.
+
+        For APIs that answer with an array, or with a bare number sent as plain text.
+        Takes the same arguments and raises the same errors as ``get_json``, except that
+        any JSON value is accepted.
+        """
+        query = dict(params or {})
+        return await self._cached_request(
+            "GET", path, query, None, immutable=immutable, decode=_decode_value
+        )
 
     async def post_json(
         self, path: str, payload: JsonObject, *, immutable: bool = False
@@ -113,7 +130,9 @@ class ApiClient:
         Raises:
             The same errors as ``get_json``.
         """
-        return await self._cached_request("POST", path, {}, payload, immutable=immutable)
+        return await self._cached_request(
+            "POST", path, {}, payload, immutable=immutable, decode=_decode_object
+        )
 
     async def aclose(self) -> None:
         if self._session is not None:
@@ -128,14 +147,15 @@ class ApiClient:
         payload: JsonObject | None,
         *,
         immutable: bool,
-    ) -> JsonObject:
+        decode: Callable[[str, str], _Decoded],
+    ) -> _Decoded:
         key = self._cache_key(method, path, query, payload) if immutable and self._cache else None
         cached = self._cache.get(key) if self._cache and key else None
         if cached is not None:
-            return _decode_object(cached, path)
+            return decode(cached, path)
 
         body = await self._request_with_retries(method, path, query, payload)
-        decoded = _decode_object(body, path)
+        decoded = decode(body, path)
         if self._cache and key:
             self._cache.put(key, body)
         return decoded
@@ -233,10 +253,15 @@ def _parse_retry_after(value: str | None) -> float | None:
 
 
 def _decode_object(body: str, path: str) -> JsonObject:
-    try:
-        decoded = json.loads(body)
-    except ValueError:
-        raise MalformedResponse(f"{path}: the response is not JSON") from None
+    decoded = _decode_value(body, path)
     if not isinstance(decoded, dict):
         raise MalformedResponse(f"{path}: expected a JSON object")
+    return decoded
+
+
+def _decode_value(body: str, path: str) -> JsonValue:
+    try:
+        decoded: JsonValue = json.loads(body)
+    except ValueError:
+        raise MalformedResponse(f"{path}: the response is not JSON") from None
     return decoded
