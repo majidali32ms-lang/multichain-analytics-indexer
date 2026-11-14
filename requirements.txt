@@ -111,7 +111,7 @@ pycryptodome==3.24.1
     # via
     #   eth-hash
     #   eth-keyfile
-pycryptodomex==3.24.1
+pycryptodomex==3.24.2
     # via py-algorand-sdk
 pydantic==2.14.3
     # via
