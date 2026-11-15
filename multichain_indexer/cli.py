@@ -43,6 +43,10 @@ ATTRIBUTIONS = {"etherscan": "Powered by Etherscan.io APIs"}
 EXIT_OUTPUT_CLOSED = 1
 # Some accounts of a cross-chain sync failed; the others were synced and reported.
 EXIT_SOME_FAILED = 1
+SERVE_HOST = "127.0.0.1"
+SERVE_PORT = 8000
+SERVE_REQUESTS_PER_MINUTE = 120
+LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 # A write to a closed pipe fails with EPIPE on Linux and EINVAL on Windows.
 CLOSED_PIPE_ERRNOS = frozenset({errno.EPIPE, errno.EINVAL})
 # What Windows reports for a write to a pipe whose reader has gone: ERROR_NO_DATA ("the pipe
@@ -436,6 +440,40 @@ def _chain_export(
     days: int | None,
 ) -> str | None:
     return indexer.export(export_format, output, account=account, days=days)
+
+
+@cli.command()
+@click.option("--host", default=SERVE_HOST, show_default=True, help="Address to listen on.")
+@click.option("--port", type=click.IntRange(1, 65535), default=SERVE_PORT, show_default=True)
+@click.option(
+    "--requests-per-minute",
+    type=click.IntRange(min=1),
+    default=SERVE_REQUESTS_PER_MINUTE,
+    show_default=True,
+    help="What each client may send.",
+)
+@click.pass_obj
+def serve(options: _Options, host: str, port: int, requests_per_minute: int) -> None:
+    """Serve the database read-only over HTTP, with OpenAPI docs at /docs. Needs the serve
+    extra."""
+    try:
+        import uvicorn
+
+        from multichain_indexer.server import create_app
+    except ImportError:
+        raise click.ClickException(
+            "serve needs the serve extra: pip install 'multichain-analytics-indexer[serve]'"
+        ) from None
+    if host not in LOOPBACK_HOSTS:
+        click.echo(
+            f"Listening on {host}: anyone who can reach it can read this database.", err=True
+        )
+    app = create_app(
+        settings=options.settings,
+        database=options.database,
+        requests_per_minute=requests_per_minute,
+    )
+    uvicorn.run(app, host=host, port=port, log_level="warning" if options.quiet else "info")
 
 
 @cli.command("pq-status")

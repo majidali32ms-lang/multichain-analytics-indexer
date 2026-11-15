@@ -145,6 +145,14 @@ def fresh_shared_limiters(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
+def working_database(tmp_path: Path) -> Path:
+    """A database holding Algorand testnet and Bitcoin mainnet records."""
+    from tests.crosschain_support import write_two_chains
+
+    return write_two_chains(tmp_path / "two-chains.db")
+
+
+@pytest.fixture
 def node() -> Iterator[FakeNode]:
     fake = FakeNode()
     fake.start()

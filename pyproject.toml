@@ -51,10 +51,16 @@ multichain-indexer = "multichain_indexer.cli:main"
 postgres = [
     "psycopg[binary]>=3.3,<4",
 ]
+serve = [
+    "fastapi>=0.163,<0.164",
+    "uvicorn>=0.54,<0.55",
+]
 
 [dependency-groups]
 dev = [
     "build",
+    "fastapi>=0.163,<0.164",
+    "httpx2>=2.16.0",
     "ipykernel",
     "mypy",
     "nbclient",
@@ -66,6 +72,7 @@ dev = [
     "pytest-cov",
     "ruff",
     "twine",
+    "uvicorn>=0.54,<0.55",
 ]
 docs = [
     "mkdocs-material",

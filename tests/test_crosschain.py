@@ -15,41 +15,18 @@ from click.testing import CliRunner
 from pydantic import SecretStr
 
 from multichain_indexer import ChainMetrics, CrossChain, InvalidInput, UnsupportedChain
-from multichain_indexer.adapters.algorand.parser import parse_transaction as parse_algorand
-from multichain_indexer.adapters.bitcoin.esplora import parse_esplora_transaction
-from multichain_indexer.adapters.bitcoin.parser import parse_transaction as parse_bitcoin
 from multichain_indexer.cli import cli
 from multichain_indexer.core.config import Settings
 from multichain_indexer.core.config_file import Price
-from multichain_indexer.core.models import TransactionRecord
 from multichain_indexer.core.storage import SQLiteStorage
 from multichain_indexer.report import metrics_table, render_html, write_report
-from tests.bitcoin_support import SMALL, fixture, serve_small
-from tests.conftest import FakeNode, Reply, load_fixture
+from tests.bitcoin_support import SMALL, serve_small
+from tests.conftest import FakeNode, Reply
+from tests.crosschain_support import ALGO_ACCOUNT, algorand_records
 from tests.test_storage import record as toy_record
 
 ALL_TIME = 36500
 BTC_PRICE = Price(usd=Decimal("98000.5"), date=date(2026, 11, 15))
-ALGO_ACCOUNT = "ALGORANDACCOUNT"
-
-
-def algorand_records() -> list[TransactionRecord]:
-    return [parse_algorand(load_fixture(name), "testnet") for name in ("tx_pay", "tx_axfer")]
-
-
-def bitcoin_mainnet_record() -> TransactionRecord:
-    source = parse_esplora_transaction(fixture("tx_mainnet_p2pk"), "/tx/p2pk")
-    return parse_bitcoin(source, "mainnet", tip_height=930_000, history_source="esplora")
-
-
-@pytest.fixture
-def working_database(tmp_path: Path) -> Path:
-    path = tmp_path / "all.db"
-    storage = SQLiteStorage(path)
-    storage.save_transactions("algorand", "testnet", ALGO_ACCOUNT, algorand_records())
-    storage.save_transactions("bitcoin", "mainnet", "key", [bitcoin_mainnet_record()])
-    storage.close()
-    return path
 
 
 @pytest.fixture
