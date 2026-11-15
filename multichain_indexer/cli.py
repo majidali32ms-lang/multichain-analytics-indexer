@@ -22,6 +22,7 @@ from multichain_indexer.core.observability import configure_logging
 from multichain_indexer.core.registry import PLANNED_CHAINS, available_chains
 from multichain_indexer.crosschain import ALL_CHAINS, CrossChain, CrossChainReport
 from multichain_indexer.db import Database, chosen_database, database_secrets, is_postgres
+from multichain_indexer.follow import FollowSummary, default_interval
 from multichain_indexer.pq import PQ_STATUS
 from multichain_indexer.report import REPORT_FORMATS, metrics_table, write_report
 
@@ -293,20 +294,52 @@ def index_contract(indexer: Indexer, contract_id: str) -> None:
 
 @cli.command()
 @click.argument("address", required=False)
+@click.option("--follow", is_flag=True, help="Keep syncing as new transactions arrive.")
+@click.option(
+    "--interval",
+    type=click.FloatRange(min=1),
+    help="Seconds between rounds with --follow; each chain has its own default.",
+)
 @click.pass_obj
-def sync(options: _Options, address: str | None) -> None:
+def sync(options: _Options, address: str | None, follow: bool, interval: float | None) -> None:
     """Store an account's new transactions; only what arrived since the last sync.
 
     With --chain all, sync every account listed under [accounts] in config.toml, chains in
     parallel; mainnet accounts only with --network mainnet."""
     if options.all_chains:
+        if follow:
+            raise click.UsageError("--follow works on one account of one chain")
         if address is not None:
             raise click.UsageError("--chain all syncs the accounts in config.toml; give no address")
         _sync_all(options)
         return
     if address is None:
         raise click.UsageError("give the account to sync")
+    if follow:
+        _follow(options, address, interval)
+        return
     _sync(options, address, show_progress=not options.quiet)
+
+
+@_with_indexer
+def _follow(indexer: Indexer, address: str, interval: float | None) -> None:
+    pause = interval or default_interval(indexer.profile.name)
+    tally = FollowSummary()
+
+    def report(result: SyncResult) -> None:
+        tally.add(result)
+        if result.records_fetched:
+            click.echo(_sync_summary(result))
+
+    click.echo(f"Following {address} every {pause:g}s; press Ctrl-C to stop.", err=True)
+    try:
+        indexer.follow(address, interval=pause, on_sync=report)
+    except KeyboardInterrupt:
+        click.echo(
+            f"Stopped after {tally.rounds} rounds: {tally.records_fetched} transactions, "
+            f"{tally.requests_made} requests.",
+            err=True,
+        )
 
 
 def _sync_all(options: _Options) -> None:

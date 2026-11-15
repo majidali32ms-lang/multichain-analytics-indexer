@@ -34,6 +34,12 @@ from multichain_indexer.core.models import (
 from multichain_indexer.core.pipeline import Pipeline, ProgressCallback
 from multichain_indexer.core.registry import create_indexer
 from multichain_indexer.db import Database, chosen_database, open_storage
+from multichain_indexer.follow import (
+    FollowSummary,
+    SyncCallback,
+    default_interval,
+    follow_account,
+)
 
 DEFAULT_TRANSACTION_LIMIT = 20
 _T = TypeVar("_T")
@@ -134,6 +140,30 @@ class AsyncIndexer:
     ) -> SyncResult:
         """Store what is new for an account since the last sync. Safe to re-run."""
         return await self._pipeline.sync_account(address, on_progress=on_progress)
+
+    async def follow(
+        self,
+        address: str,
+        *,
+        interval: float | None = None,
+        on_sync: SyncCallback | None = None,
+        rounds: int | None = None,
+    ) -> FollowSummary:
+        """Sync ``address`` again and again, storing new transactions as they arrive.
+
+        Args:
+            address: The account to follow.
+            interval: Seconds between rounds; the chain's own default when None.
+            on_sync: Called with each round's result.
+            rounds: Stop after this many rounds; follow until cancelled when None.
+        """
+        return await follow_account(
+            self.sync,
+            address,
+            interval=interval or default_interval(self.profile.name),
+            on_sync=on_sync,
+            rounds=rounds,
+        )
 
     def stored_transactions(
         self, *, account: str | None = None, days: int | None = None
@@ -273,6 +303,19 @@ class Indexer:
     def sync(self, address: str, *, on_progress: ProgressCallback | None = None) -> SyncResult:
         """See ``AsyncIndexer.sync``."""
         return self._thread.run(self._inner.sync(address, on_progress=on_progress))
+
+    def follow(
+        self,
+        address: str,
+        *,
+        interval: float | None = None,
+        on_sync: SyncCallback | None = None,
+        rounds: int | None = None,
+    ) -> FollowSummary:
+        """See ``AsyncIndexer.follow``. Ctrl-C stops it."""
+        return self._thread.run(
+            self._inner.follow(address, interval=interval, on_sync=on_sync, rounds=rounds)
+        )
 
     def stored_transactions(
         self, *, account: str | None = None, days: int | None = None
