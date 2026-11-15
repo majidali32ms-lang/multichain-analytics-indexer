@@ -20,7 +20,7 @@ from multichain_indexer.core.ratelimit import (
 )
 from multichain_indexer.core.registry import create_indexer
 
-KEY = SecretStr("proapi_not_a_real_key")
+KEY = SecretStr("not-a-real-key")
 
 
 def test_a_scope_has_one_limiter() -> None:
