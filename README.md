@@ -625,23 +625,137 @@ Each row of its output has the chain's status, its source and the date it was ch
 [post-quantum page](https://majidali32ms-lang.github.io/multichain-analytics-indexer/post-quantum/)
 has the full table, what is counted, and its limits.
 
+## Every chain at once
+
+`--chain all` works on every chain and network in the database. This is a database that
+version 0.6.0 wrote while syncing one small account on each test network:
+
+```bash
+multichain-indexer --chain all metrics --days 365
+```
+
+```text
+Chain             Transactions  Per day  Active                      Fees  Fees (USD)  Failed
+algorand testnet           108      0.3       6                0.108 ALGO         n/a    0.0%
+bitcoin testnet4             4     0.01       4            0.00001472 BTC         n/a    0.0%
+ethereum testnet            19     0.05       1  0.026567220971150023 ETH         n/a    0.0%
+near testnet                20     0.05       2   0.0221832130514401 NEAR         n/a   25.0%
+solana devnet                6     0.02       2               0.00003 SOL         n/a    0.0%
+Last 365 days. US dollars only for mainnet, at the price in config.toml.
+```
+
+- `report --output report.html` writes the same comparison as one HTML file with charts that
+  opens offline; `--format csv` and `--format json` write it as data.
+  [Example report](https://majidali32ms-lang.github.io/multichain-analytics-indexer/examples/cross-chain-report.html).
+- `--chain all export` writes every chain into one table: the shared fields as columns and each
+  chain's `native` block as a JSON column, so it loads into one pandas DataFrame.
+- `--chain all sync` syncs the accounts listed under `[accounts]` in `config.toml`, chains in
+  parallel. A chain that fails shows its error and the others carry on.
+- `sync ADDRESS --follow` keeps syncing one account as new transactions arrive, until Ctrl-C,
+  pausing between rounds 60 s on Bitcoin, 30 s on Solana and NEAR, 15 s on the EVM chains,
+  10 s on Algorand and 30 s on plugin chains; `--interval` changes it.
+- Fees are in each chain's own unit, and in US dollars only for mainnet, at a price and date
+  you give in `config.toml`. Nothing is fetched from a price service.
+- Chains that share a provider key (Blockscout, Etherscan, NodeReal, Alchemy) share one rate
+  limiter, and keyless endpoints are limited per host, so parallel chains stay within free
+  plans.
+
+From Python, `CrossChain` and `AsyncCrossChain` do the same. The
+[cross-chain page](https://majidali32ms-lang.github.io/multichain-analytics-indexer/cross-chain/) has the details and the `config.toml` format.
+
+## config.toml
+
+Endpoints, default networks, accounts and prices can live in `config.toml`, in the current
+folder or wherever `--config` points. `.env` and the environment win over it. It never holds
+secrets: a key ending in `_API_KEY` or `_TOKEN` there is refused, with an error that names the
+key and not its value. A chain's default network can be set there, but mainnet always needs
+`--network mainnet` on the command line: `network = "mainnet"` in `config.toml` is refused
+with an error that says to pass `--network mainnet` instead.
+
+```toml
+[chains.bitcoin]
+network = "signet"
+
+[accounts.bitcoin]
+signet = ["tb1q..."]
+
+[prices.bitcoin]
+usd = 98000.5
+date = 2026-11-15
+```
+
+## PostgreSQL
+
+SQLite is the default. For PostgreSQL:
+
+```bash
+pip install 'multichain-analytics-indexer[postgres]'
+multichain-indexer --db postgresql://indexer@localhost:5432/indexer --chain bitcoin sync tb1q...
+```
+
+or set `MCI_DATABASE_URL` in `.env`. Every database is migrated with Alembic before it is read;
+one written by 0.6.0 or earlier is stamped at the first revision without touching a row.
+PostgreSQL stores amounts as `NUMERIC`, times as `TIMESTAMPTZ` and `native` blocks as `JSONB`,
+so the tables can be queried with SQL. Alembic and SQLAlchemy are now dependencies of the
+package itself, since SQLite is migrated too. The
+[storage page](https://majidali32ms-lang.github.io/multichain-analytics-indexer/storage/) has more.
+
+## HTTP API
+
+```bash
+pip install 'multichain-analytics-indexer[serve]'
+multichain-indexer serve
+```
+
+serves the database read-only on `http://127.0.0.1:8000`: the stored chains, transactions in
+pages, metrics per chain and across chains, and accounts as `index account` last stored them,
+with OpenAPI docs at `/docs`. By default no request reaches the network or writes to the
+database; `--live-accounts` lets account lookups read the chain and store the new state. It
+never migrates the database: one at an older schema is refused with the command that upgrades
+it. It listens on localhost unless `--host` says otherwise, and holds each client to 120
+requests a minute. Routes and examples are on the [HTTP API page](https://majidali32ms-lang.github.io/multichain-analytics-indexer/http-api/).
+
+## Adding a chain
+
+Another package can add a chain through the entry point group `multichain_indexer.adapters`,
+without changing this one; it then works with every command, `--chain all`, the report and the
+HTTP API. `examples/plugin-template` is a complete, tested plugin to copy, and the
+[guide](https://majidali32ms-lang.github.io/multichain-analytics-indexer/plugins/) walks through it.
+
+## Docker
+
+```bash
+echo "POSTGRES_PASSWORD=choose-one" >> .env
+docker compose up -d
+docker compose run --rm indexer --chain bitcoin sync mgdKMwnT4S5gbx55Uw3tRJchUSrHwAFjzu
+```
+
+starts PostgreSQL 18.7 and the HTTP API, published on `127.0.0.1:8000` only. The image runs as
+an unprivileged user on `python:3.14-slim`, pinned by digest.
+
 ## How it is built
 
 ```text
 multichain_indexer/
   api.py            Indexer and AsyncIndexer, the public API
-  cli.py            the command line, which only calls api.py
+  crosschain.py     CrossChain: every chain at once
+  follow.py         follow mode, rounds of the incremental sync
+  report.py         the comparison report as HTML, CSV or JSON
+  server.py         the read-only HTTP API (serve extra)
+  cli.py            the command line, which only calls the Python API
+  db/               opens SQLite or PostgreSQL, migrated with Alembic first
   core/             shared code that knows nothing about a specific chain
     base_indexer.py   the contract every adapter implements
-    registry.py       chain name to adapter
+    registry.py       chain name to adapter, built in or from a plugin's entry point
     pipeline.py       fetch, store, summarise; incremental sync
     storage.py        SQLite behind a storage interface
     metrics.py        pandas metrics any chain can use
     export.py         CSV, JSON and Parquet
     http.py           timeouts, retries, Retry-After
-    ratelimit.py      per-endpoint request pacing
+    ratelimit.py      request pacing, shared per provider key or per host
     cache.py          optional cache for data that can never change
-    config.py         settings from .env and the environment
+    config.py         settings from config.toml, .env and the environment
+    config_file.py    reads config.toml and refuses secrets in it
     observability.py  structured logs with secrets masked
   adapters/algorand/  client, parser, metrics
   adapters/solana/    client, parser, metrics
@@ -667,6 +781,10 @@ sync runs it shows a running count, because the total is not known in advance.
   environment.
 - Plain `http` endpoints are refused, except on localhost.
 - Addresses and IDs are validated before any request is sent.
+- `config.toml` is refused if it holds a key or token, and the error never shows the value.
+- A database URL's password never appears in logs or errors.
+- `serve` is read-only: by default no request reaches the network or writes to the database.
+  It listens on 127.0.0.1 unless told otherwise and limits each client's request rate.
 
 See [SECURITY.md](SECURITY.md) to report a vulnerability.
 

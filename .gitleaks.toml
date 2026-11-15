@@ -15,4 +15,7 @@ regexes = [
     # The output scripts of Bitcoin transactions, hex as Esplora returns them, such as
     # "0014fcb55e69..." for a P2WPKH output (tests/fixtures/bitcoin/).
     '''"scriptpubkey(_asm|_address|_type)?": "''',
+    # The ERC-20 contract of an EVM token transfer, as a stored native block holds it, such
+    # as "0x5993716127145Bc66Cc4C3B3d8c179a9E95EdEbc" (tests/fixtures/db/indexer-0.6.0.sql).
+    '''"token":"0x[0-9a-fA-F]{40}"''',
 ]

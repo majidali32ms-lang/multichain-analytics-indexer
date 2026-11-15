@@ -1,4 +1,7 @@
-"""Settings, read once from ``.env`` and the process environment.
+"""Settings, read once from ``config.toml``, ``.env`` and the process environment.
+
+The environment wins over ``.env``, which wins over ``config.toml``. Secrets belong only in
+the first two; ``config_file`` explains why.
 
 Endpoints are held as secrets because hosted providers often put the API key in the
 URL. ``.env`` is parsed with ``dotenv_values`` rather than loaded, so its secrets are
@@ -14,10 +17,12 @@ from pathlib import Path
 from dotenv import dotenv_values
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError
 
+from multichain_indexer.core.config_file import FileConfig, Price, read_config_file
 from multichain_indexer.core.errors import ConfigError
 
 ENV_PREFIX = "MCI_"
 DEFAULT_DATABASE = Path.home() / ".multichain-indexer" / "indexer.db"
+DEFAULT_CONFIG_FILE = "config.toml"
 LOCAL_URL_PREFIXES = ("http://localhost", "http://127.0.0.1")
 
 
@@ -30,18 +35,27 @@ class Settings(BaseModel):
     request_timeout: float = Field(default=20.0, gt=0, le=300)
     max_retries: int = Field(default=4, ge=0, le=10)
     env: Mapping[str, SecretStr] = Field(default_factory=dict, repr=False)
+    default_networks: Mapping[str, str] = Field(default_factory=dict)
+    accounts: Mapping[str, Mapping[str, tuple[str, ...]]] = Field(default_factory=dict)
+    prices: Mapping[str, Price] = Field(default_factory=dict)
 
     @classmethod
     def from_env(
-        cls, env_file: str | Path | None = ".env", environ: Mapping[str, str] | None = None
+        cls,
+        env_file: str | Path | None = ".env",
+        environ: Mapping[str, str] | None = None,
+        config_file: str | Path | None = DEFAULT_CONFIG_FILE,
     ) -> Settings:
-        """Merge ``env_file`` with the environment; the environment wins.
+        """Merge ``config_file``, ``env_file`` and the environment; the environment wins.
+
+        Either file is skipped when it does not exist.
 
         Raises:
-            ConfigError: A setting has an invalid value. The message names the setting
-                and never repeats its value.
+            ConfigError: A setting has an invalid value, or ``config_file`` holds a secret
+                or is malformed. The message names the setting and never repeats its value.
         """
-        merged = _merged_environment(env_file, environ)
+        from_file = read_config_file(Path(config_file)) if config_file else FileConfig()
+        merged = {**from_file.env, **_merged_environment(env_file, environ)}
         fields = {
             key.removeprefix(ENV_PREFIX).lower(): value
             for key, value in merged.items()
@@ -49,7 +63,15 @@ class Settings(BaseModel):
         }
         secrets = {key: SecretStr(value) for key, value in merged.items()}
         try:
-            return cls.model_validate({**fields, "env": secrets})
+            return cls.model_validate(
+                {
+                    **fields,
+                    "env": secrets,
+                    "default_networks": from_file.default_networks,
+                    "accounts": from_file.accounts,
+                    "prices": from_file.prices,
+                }
+            )
         except ValidationError as exc:
             names = sorted({f"{ENV_PREFIX}{str(e['loc'][0]).upper()}" for e in exc.errors()})
             raise ConfigError(f"invalid setting: {', '.join(names)}") from None

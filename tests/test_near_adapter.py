@@ -29,6 +29,7 @@ from multichain_indexer.adapters.near import fastnear as fastnear_module
 from multichain_indexer.adapters.near.fastnear import _executed_transaction, _RawTransaction
 from multichain_indexer.adapters.near.history import ExecutedTransaction, HistoryPage
 from multichain_indexer.cli import cli
+from multichain_indexer.core import ratelimit
 from multichain_indexer.core.config import Settings
 from tests.conftest import FakeNode, Reply
 from tests.conftest import load_near_fixture as fixture
@@ -173,6 +174,7 @@ def test_default_rates_are_measured_and_configurable() -> None:
     assert adapter._rpc._client._limiter._interval == pytest.approx(1)
     assert adapter._history._client._limiter._interval == pytest.approx(2)
 
+    ratelimit._shared.clear()
     configured = create_indexer(
         None, Settings.from_env(None, environ={"MCI_REQUESTS_PER_SECOND": "50"})
     )

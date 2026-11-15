@@ -16,4 +16,9 @@ nav:
   - EVM chains: chains/evm.md
   - Bitcoin: chains/bitcoin.md
   - Post-quantum readiness: post-quantum.md
+  - Cross-chain: cross-chain.md
+  - Storage, PostgreSQL and Docker: storage.md
+  - HTTP API: http-api.md
+  - Add a chain: plugins.md
+  - Benchmark: benchmark.md
   - Python API: api.md

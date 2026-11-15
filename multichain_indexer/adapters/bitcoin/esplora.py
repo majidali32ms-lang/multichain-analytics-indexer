@@ -27,7 +27,7 @@ from multichain_indexer.adapters.bitcoin.scripts import P2PK, P2TR, P2WPKH, P2WS
 from multichain_indexer.core.config import Settings
 from multichain_indexer.core.errors import InvalidInput, MalformedResponse, NotFound
 from multichain_indexer.core.http import ApiClient, JsonObject, ResponseStore
-from multichain_indexer.core.ratelimit import RateLimiter
+from multichain_indexer.core.ratelimit import host_scope, shared_limiter
 
 CHAIN = "bitcoin"
 SOURCE_NAME = "esplora"
@@ -118,11 +118,12 @@ def create_esplora_source(
     network: BitcoinNetwork, settings: Settings, cache: ResponseStore | None = None
 ) -> BitcoinSource:
     """Build the source for ``network``, on its configured or default server."""
+    server = settings.endpoint(CHAIN, network.name, SERVER_SETTING, network.esplora_server)
     client = ApiClient(
-        settings.endpoint(CHAIN, network.name, SERVER_SETTING, network.esplora_server),
+        server,
         timeout=settings.request_timeout,
         max_retries=settings.max_retries,
-        limiter=RateLimiter(_requests_per_second(settings)),
+        limiter=shared_limiter(host_scope(server), _requests_per_second(settings)),
         cache=cache,
     )
     return EsploraSource(client)

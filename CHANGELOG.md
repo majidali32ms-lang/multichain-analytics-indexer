@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.7.0
+
+Adds what only a tool for many chains can do: every chain at once.
+
+- `--chain all` for `metrics` (a side-by-side table, or `--json`), `export` (every chain in one
+  table: shared fields as columns, `native` as a JSON column) and `sync` (the accounts listed in
+  `config.toml`, chains in parallel; mainnet accounts only with `--network mainnet`). A chain
+  that fails shows its error and the others carry on; an export stops rather than leave a chain
+  out. `CrossChain` and `AsyncCrossChain` do the same from Python.
+- `report` writes the comparison as one offline HTML file with inline SVG charts, or as CSV or
+  JSON, with the same numbers `metrics --chain all` prints.
+- Fees in US dollars only for mainnet, from a price and date the user gives in `config.toml`.
+- `config.toml` for settings, endpoints, default networks, accounts and prices, below `.env` and
+  the environment. A key ending in `_API_KEY` or `_TOKEN` there is refused, and the error names
+  the key, never its value. Mainnet still needs `--network mainnet`. New `--config` option.
+- `sync ADDRESS --follow` repeats the incremental sync until Ctrl-C, with a pause per chain
+  (Bitcoin 60 s, Solana and NEAR 30 s, EVM chains 15 s, Algorand 10 s) or `--interval`.
+  `Indexer.follow` and `AsyncIndexer.follow` in Python.
+- One rate limiter per provider key shared by several chains (Blockscout, Etherscan, NodeReal,
+  Alchemy), and per host for keyless endpoints. Measured: three chains on one Blockscout key with
+  a limiter each drew HTTP 429 on 26 to 47 of 90 requests; one shared limiter, 0 or 1.
+- PostgreSQL storage with the `postgres` extra (psycopg 3): `--db postgresql://...` or
+  `MCI_DATABASE_URL`. Amounts are `NUMERIC`, times `TIMESTAMPTZ`, `native` blocks `JSONB`. The
+  URL's password never appears in logs or errors.
+- Alembic migrations for SQLite and PostgreSQL. A database written by 0.6.0 or earlier is stamped
+  at the first revision without touching a row; a test proves it on a database the released
+  0.6.0 package wrote.
+- `serve`, with the `serve` extra (FastAPI, uvicorn): a read-only HTTP API on 127.0.0.1 with
+  OpenAPI docs, pages of stored transactions, metrics per chain and across chains, accounts as
+  `index account` last stored them, and a request limit per client. By default no request
+  reaches the network or writes to the database; `serve --live-accounts` lets account lookups
+  read the chain and store the new state. `serve` never migrates: a database that is missing or
+  at an older schema is refused with the command that upgrades it, so a read-only database user
+  is enough.
+- Plugins: other packages add chains through the entry point group
+  `multichain_indexer.adapters`, imported only when used and never under a built-in chain's name.
+  A tested template is in `examples/plugin-template`, with a guide in the docs. `--network`
+  accepts any network name, which each adapter checks.
+- A Docker image and `docker-compose.yml` with PostgreSQL 18.7; the API is published on
+  127.0.0.1 only.
+- `scripts/benchmark.py` measures a first sync per chain; results are on the docs site.
+- Core changes, approved before they were made: shared rate limiters (`core/ratelimit.py`),
+  plugin entry points (`core/registry.py`), `Storage.stored_networks` (`core/storage.py`) and
+  `config.toml` (`core/config.py`, `core/config_file.py`).
+- New dependencies: `alembic` 1.20 and `SQLAlchemy` 2.1, with `Mako` and `MarkupSafe` through
+  alembic, because every database is migrated. Optional: `psycopg[binary]` 3.3 (`postgres`),
+  `fastapi` 0.163 and `uvicorn` 0.54 (`serve`). Click 8.5 or newer is now required.
+
 ## 0.6.0
 
 Adds Bitcoin.

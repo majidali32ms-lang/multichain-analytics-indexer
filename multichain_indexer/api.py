@@ -33,7 +33,13 @@ from multichain_indexer.core.models import (
 )
 from multichain_indexer.core.pipeline import Pipeline, ProgressCallback
 from multichain_indexer.core.registry import create_indexer
-from multichain_indexer.core.storage import SQLiteStorage
+from multichain_indexer.db import Database, chosen_database, open_storage
+from multichain_indexer.follow import (
+    FollowSummary,
+    SyncCallback,
+    default_interval,
+    follow_account,
+)
 
 DEFAULT_TRANSACTION_LIMIT = 20
 _T = TypeVar("_T")
@@ -52,9 +58,13 @@ class AsyncIndexer:
 
     Args:
         chain: Chain name, such as ``"algorand"``.
-        network: Network name; the chain's test network when None.
+        network: Network name; when None, the chain's network in ``config.toml``, else its
+            test network.
         settings: Configuration; read from ``.env`` and the environment when None.
-        database: Database file; overrides the configured one.
+        database: SQLite file or PostgreSQL URL; overrides ``MCI_DATABASE_URL`` and the
+            configured file.
+        migrate: Bring the database to the current schema first. ``serve`` turns this off
+            because it never writes, after checking the schema is already current.
 
     Raises:
         UnsupportedChain: The chain is unknown or not available in this version.
@@ -67,12 +77,14 @@ class AsyncIndexer:
         network: str | None = None,
         *,
         settings: Settings | None = None,
-        database: Path | None = None,
+        database: Database | None = None,
+        migrate: bool = True,
     ) -> None:
         config = settings or Settings.from_env()
         self._cache = ResponseCache(config.cache_path) if config.cache_path else None
-        self._indexer = create_indexer(chain, network, config, self._cache)
-        self._storage = SQLiteStorage(database or config.database)
+        chosen = network or config.default_networks.get(chain)
+        self._indexer = create_indexer(chain, chosen, config, self._cache)
+        self._storage = open_storage(chosen_database(config, database), migrate=migrate)
         self._pipeline = Pipeline(self._indexer, self._storage)
 
     @property
@@ -131,6 +143,30 @@ class AsyncIndexer:
     ) -> SyncResult:
         """Store what is new for an account since the last sync. Safe to re-run."""
         return await self._pipeline.sync_account(address, on_progress=on_progress)
+
+    async def follow(
+        self,
+        address: str,
+        *,
+        interval: float | None = None,
+        on_sync: SyncCallback | None = None,
+        rounds: int | None = None,
+    ) -> FollowSummary:
+        """Sync ``address`` again and again, storing new transactions as they arrive.
+
+        Args:
+            address: The account to follow.
+            interval: Seconds between rounds; the chain's own default when None.
+            on_sync: Called with each round's result.
+            rounds: Stop after this many rounds; follow until cancelled when None.
+        """
+        return await follow_account(
+            self.sync,
+            address,
+            interval=interval or default_interval(self.profile.name),
+            on_sync=on_sync,
+            rounds=rounds,
+        )
 
     def stored_transactions(
         self, *, account: str | None = None, days: int | None = None
@@ -226,12 +262,15 @@ class Indexer:
         network: str | None = None,
         *,
         settings: Settings | None = None,
-        database: Path | None = None,
+        database: Database | None = None,
+        migrate: bool = True,
     ) -> None:
         self._thread = _LoopThread()
         try:
             self._inner = self._thread.call(
-                lambda: AsyncIndexer(chain, network, settings=settings, database=database)
+                lambda: AsyncIndexer(
+                    chain, network, settings=settings, database=database, migrate=migrate
+                )
             )
         except BaseException:
             self._thread.close()
@@ -270,6 +309,19 @@ class Indexer:
     def sync(self, address: str, *, on_progress: ProgressCallback | None = None) -> SyncResult:
         """See ``AsyncIndexer.sync``."""
         return self._thread.run(self._inner.sync(address, on_progress=on_progress))
+
+    def follow(
+        self,
+        address: str,
+        *,
+        interval: float | None = None,
+        on_sync: SyncCallback | None = None,
+        rounds: int | None = None,
+    ) -> FollowSummary:
+        """See ``AsyncIndexer.follow``. Ctrl-C stops it."""
+        return self._thread.run(
+            self._inner.follow(address, interval=interval, on_sync=on_sync, rounds=rounds)
+        )
 
     def stored_transactions(
         self, *, account: str | None = None, days: int | None = None

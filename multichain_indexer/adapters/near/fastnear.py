@@ -22,7 +22,7 @@ from multichain_indexer.adapters.near.history import (
 from multichain_indexer.core.config import Settings
 from multichain_indexer.core.errors import MalformedResponse
 from multichain_indexer.core.http import ApiClient, JsonObject, ResponseStore
-from multichain_indexer.core.ratelimit import RateLimiter
+from multichain_indexer.core.ratelimit import host_scope, shared_limiter
 
 CHAIN = "near"
 DEFAULT_SERVERS = {
@@ -184,12 +184,13 @@ def create_fastnear_history(
             f"NEAR {network} has no public history service; "
             f"set {setting} to read an account's transactions"
         )
+    server = settings.endpoint(CHAIN, network, "HISTORY_SERVER", default or "")
     client = ApiClient(
-        settings.endpoint(CHAIN, network, "HISTORY_SERVER", default or ""),
+        server,
         headers=_auth_headers(settings, network),
         timeout=settings.request_timeout,
         max_retries=settings.max_retries,
-        limiter=RateLimiter(_requests_per_second(settings)),
+        limiter=shared_limiter(host_scope(server), _requests_per_second(settings)),
         cache=cache,
     )
     return FastNearHistory(client)
