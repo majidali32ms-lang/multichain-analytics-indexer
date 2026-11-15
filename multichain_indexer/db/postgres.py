@@ -102,7 +102,7 @@ class PostgresStorage(Storage):
                 url, autocommit=True, connect_timeout=connect_timeout
             )
         except psycopg.Error as exc:
-            message = str(exc).strip().splitlines()[0] if str(exc).strip() else type(exc).__name__
+            message = (str(exc).strip() or type(exc).__name__).splitlines()[0]
             for secret in redact:
                 message = message.replace(secret, "***")
             raise ConfigError(f"cannot open the PostgreSQL database: {message}") from None

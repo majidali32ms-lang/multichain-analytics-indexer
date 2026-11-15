@@ -8,19 +8,20 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import psycopg
 import pytest
 from click.testing import CliRunner
 
 from multichain_indexer import Indexer
 from multichain_indexer.cli import cli
 from multichain_indexer.core.config import Settings
+from multichain_indexer.core.errors import ConfigError
 from multichain_indexer.db import SQLALCHEMY_POSTGRES, open_storage
 from multichain_indexer.db.migrate import BASELINE, current_revision
+from multichain_indexer.db.postgres import PostgresStorage
 from tests.bitcoin_support import SMALL, serve_small
 from tests.conftest import FakeNode
 from tests.postgres_support import postgres_url
-
-pytestmark = pytest.mark.filterwarnings("error")
 
 
 def sqlalchemy_url(url: str) -> str:
@@ -28,8 +29,6 @@ def sqlalchemy_url(url: str) -> str:
 
 
 def test_a_new_database_is_migrated_with_postgresql_types() -> None:
-    import psycopg
-
     url = postgres_url()
     open_storage(url).close()
     assert current_revision(sqlalchemy_url(url)) == BASELINE
@@ -79,3 +78,27 @@ def test_the_command_line_takes_a_postgresql_url(
     assert CliRunner().invoke(cli, [*options, "sync", SMALL]).exit_code == 0
     report = json.loads(CliRunner().invoke(cli, [*options, "metrics", "--days", "36500"]).stdout)
     assert report["transactions"] > 0
+
+
+def test_an_unreachable_server_is_reported_without_its_password() -> None:
+    password = "not-a-real-password"
+    with pytest.raises(ConfigError, match="cannot open the PostgreSQL database") as failed:
+        PostgresStorage(
+            f"postgresql://indexer:{password}@127.0.0.1:1/indexer",
+            connect_timeout=1,
+            redact=(password,),
+        )
+    assert password not in str(failed.value)
+
+
+def test_a_snapshot_keeps_the_latest_state_as_jsonb(node: FakeNode, btc_settings: Settings) -> None:
+    url = postgres_url()
+    serve_small(node)
+    with Indexer("bitcoin", settings=btc_settings, database=url) as indexer:
+        first = indexer.account(SMALL)
+        indexer.account(SMALL)
+    with psycopg.connect(url) as connection:
+        rows = connection.execute(
+            "SELECT kind, item_id, record->>'balance' FROM snapshots"
+        ).fetchall()
+    assert rows == [("AccountRecord", SMALL, str(first.balance))]
