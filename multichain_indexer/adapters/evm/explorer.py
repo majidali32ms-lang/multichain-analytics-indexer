@@ -38,7 +38,7 @@ from multichain_indexer.core.errors import (
     RateLimited,
 )
 from multichain_indexer.core.http import ApiClient
-from multichain_indexer.core.ratelimit import RateLimiter
+from multichain_indexer.core.ratelimit import key_scope, shared_limiter
 
 PAGE_SIZE = 100
 TXLIST = "txlist"
@@ -213,7 +213,7 @@ def create_explorer_history(service: ExplorerService, context: SourceContext) ->
         headers=headers if service.key_in_header else None,
         timeout=context.settings.request_timeout,
         max_retries=context.settings.max_retries,
-        limiter=RateLimiter(service.requests_per_second),
+        limiter=shared_limiter(key_scope(service.key_setting, key), service.requests_per_second),
     )
     chain_id = context.chain.networks[context.network].chain_id
     actions = (TXLIST, TOKENTX) if context.scope == SCOPE_ALL else (TXLIST,)

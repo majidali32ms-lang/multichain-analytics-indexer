@@ -72,7 +72,7 @@ from multichain_indexer.core.models import (
     TransactionPage,
     TransactionRecord,
 )
-from multichain_indexer.core.ratelimit import RateLimiter
+from multichain_indexer.core.ratelimit import host_scope, shared_limiter
 from multichain_indexer.core.registry import IndexerFactory
 
 WEI_DECIMALS = 18
@@ -520,11 +520,12 @@ def indexer_factory(chain: EvmChain) -> IndexerFactory:
         default_server = (
             LOCALNET_RPC_SERVER if chosen == LOCALNET else chain.networks[chosen].rpc_server
         )
+        server = settings.endpoint(chain.name, chosen, "RPC_SERVER", default_server)
         client = ApiClient(
-            settings.endpoint(chain.name, chosen, "RPC_SERVER", default_server),
+            server,
             timeout=settings.request_timeout,
             max_retries=settings.max_retries,
-            limiter=RateLimiter(_rpc_requests_per_second(settings)),
+            limiter=shared_limiter(host_scope(server), _rpc_requests_per_second(settings)),
             cache=cache,
         )
         return adapter(chosen, EvmRpc(client), settings)

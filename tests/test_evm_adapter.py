@@ -36,6 +36,7 @@ from multichain_indexer.adapters.evm.profiles import (
 )
 from multichain_indexer.cli import EVM_CHAINS as CLI_EVM_CHAINS
 from multichain_indexer.cli import cli
+from multichain_indexer.core import ratelimit
 from multichain_indexer.core.config import Settings
 from multichain_indexer.core.registry import PLANNED_CHAINS, create_indexer
 from tests.conftest import FakeNode, Reply
@@ -523,6 +524,7 @@ async def test_localnet_names_itself_in_messages(node: FakeNode, tmp_path: Path)
 def test_default_rpc_rate_is_measured_and_configurable() -> None:
     adapter = create_indexer("base", None, Settings())
     assert adapter._rpc._client._limiter._interval == pytest.approx(0.2)
+    ratelimit._shared.clear()
     configured = create_indexer(
         "base", None, Settings.from_env(None, environ={"MCI_REQUESTS_PER_SECOND": "50"})
     )

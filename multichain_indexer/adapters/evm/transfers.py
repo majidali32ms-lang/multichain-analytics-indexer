@@ -33,7 +33,7 @@ from multichain_indexer.core.errors import (
     RateLimited,
 )
 from multichain_indexer.core.http import ApiClient, JsonObject
-from multichain_indexer.core.ratelimit import RateLimiter
+from multichain_indexer.core.ratelimit import key_scope, shared_limiter
 
 DIRECTIONS = ("fromAddress", "toAddress")
 EXTERNAL = "external"
@@ -214,7 +214,7 @@ def create_transfer_history(
         endpoint,
         timeout=context.settings.request_timeout,
         max_retries=context.settings.max_retries,
-        limiter=RateLimiter(requests_per_second),
+        limiter=shared_limiter(key_scope(api.key_setting, key), requests_per_second),
     )
     categories = (EXTERNAL, api.token_category) if context.scope == SCOPE_ALL else (EXTERNAL,)
     return TransferHistory(api, client, context.rpc, categories)
