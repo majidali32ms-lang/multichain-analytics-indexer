@@ -68,7 +68,7 @@ jobs:
       - run: docker compose build
       - run: docker compose up --detach --wait
       - run: >-
-          curl --fail --silent --show-error --retry 10 --retry-connrefused --retry-delay 2
+          curl --fail --silent --show-error --retry 10 --retry-all-errors --retry-delay 2
           http://127.0.0.1:8000/health
       - run: docker compose run --rm indexer --chain all metrics
       - run: docker compose run --rm indexer pq-status
