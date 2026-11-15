@@ -20,7 +20,9 @@ from multichain_indexer.core.export import EXPORT_FORMATS
 from multichain_indexer.core.models import SyncResult, TransactionRecord
 from multichain_indexer.core.observability import configure_logging
 from multichain_indexer.core.registry import PLANNED_CHAINS, available_chains
+from multichain_indexer.crosschain import ALL_CHAINS, CrossChain, CrossChainReport
 from multichain_indexer.pq import PQ_STATUS
+from multichain_indexer.report import REPORT_FORMATS, metrics_table, write_report
 
 if sys.platform == "win32":
     import ctypes
@@ -38,6 +40,8 @@ EVM_CHAINS = ("ethereum", "arbitrum", "optimism", "base", "polygon", "bnb")
 ATTRIBUTIONS = {"etherscan": "Powered by Etherscan.io APIs"}
 # The exit code Click uses when the reader of a pipe goes away, as in `... | head`.
 EXIT_OUTPUT_CLOSED = 1
+# Some accounts of a cross-chain sync failed; the others were synced and reported.
+EXIT_SOME_FAILED = 1
 # A write to a closed pipe fails with EPIPE on Linux and EINVAL on Windows.
 CLOSED_PIPE_ERRNOS = frozenset({errno.EPIPE, errno.EINVAL})
 # What Windows reports for a write to a pipe whose reader has gone: ERROR_NO_DATA ("the pipe
@@ -55,7 +59,7 @@ class _ChainName(click.ParamType[str]):
             chains = available_chains()
         except ConfigError as exc:
             self.fail(str(exc), param, ctx)
-        if value not in chains:
+        if value not in (*chains, ALL_CHAINS):
             self.fail(
                 f"{value!r} is not a known chain; choose from {', '.join(chains)}", param, ctx
             )
@@ -79,8 +83,20 @@ class _Options:
         self.settings = settings
         self.quiet = quiet
 
+    @property
+    def all_chains(self) -> bool:
+        return self.chain == ALL_CHAINS
+
     def open_indexer(self) -> Indexer:
+        if self.all_chains:
+            raise InvalidInput(
+                "this command works on one chain; --chain all is for metrics, export, sync "
+                "and report"
+            )
         return Indexer(self.chain, self.network, settings=self.settings, database=self.database)
+
+    def open_cross_chain(self) -> CrossChain:
+        return CrossChain(settings=self.settings, database=self.database)
 
 
 def _with_indexer(
@@ -105,7 +121,10 @@ def _with_indexer(
     type=_ChainName(),
     default="algorand",
     show_default=True,
-    help=f"Chain to work on: {', '.join(PLANNED_CHAINS)}, or a chain an installed plugin adds.",
+    help=(
+        f"Chain to work on: {', '.join(PLANNED_CHAINS)}, a chain an installed plugin adds, "
+        "or all (metrics, export, sync and report)."
+    ),
 )
 @click.option(
     "--network",
@@ -265,11 +284,37 @@ def index_contract(indexer: Indexer, contract_id: str) -> None:
 
 
 @cli.command()
-@click.argument("address")
+@click.argument("address", required=False)
 @click.pass_obj
-def sync(options: _Options, address: str) -> None:
-    """Store an account's new transactions; only what arrived since the last sync."""
+def sync(options: _Options, address: str | None) -> None:
+    """Store an account's new transactions; only what arrived since the last sync.
+
+    With --chain all, sync every account listed under [accounts] in config.toml, chains in
+    parallel; mainnet accounts only with --network mainnet."""
+    if options.all_chains:
+        if address is not None:
+            raise click.UsageError("--chain all syncs the accounts in config.toml; give no address")
+        _sync_all(options)
+        return
+    if address is None:
+        raise click.UsageError("give the account to sync")
     _sync(options, address, show_progress=not options.quiet)
+
+
+def _sync_all(options: _Options) -> None:
+    with options.open_cross_chain() as everything:
+        try:
+            outcomes = everything.sync(options.network)
+        except IndexerError as exc:
+            raise click.ClickException(str(exc)) from None
+    for outcome in outcomes:
+        if outcome.result is not None:
+            click.echo(_sync_summary(outcome.result))
+            continue
+        where = f"{outcome.account} on {outcome.chain} {outcome.network}"
+        click.echo(f"Failed {where}: {outcome.error}", err=True)
+    if any(outcome.error is not None for outcome in outcomes):
+        sys.exit(EXIT_SOME_FAILED)
 
 
 @_with_indexer
@@ -286,12 +331,58 @@ def _sync(indexer: Indexer, address: str, *, show_progress: bool) -> None:
 @cli.command()
 @click.option("--days", type=click.IntRange(min=1), default=30, show_default=True)
 @click.option("--account", help="Limit to one synced account.")
+@click.option("--json", "as_json", is_flag=True, help="With --chain all, print JSON.")
 @click.pass_obj
+def metrics(options: _Options, days: int, account: str | None, as_json: bool) -> None:
+    """Print metrics over stored transactions as JSON; fees are in the chain's base unit.
+
+    With --chain all, print every stored chain and network side by side."""
+    if not options.all_chains:
+        _chain_metrics(options, days, account)
+        return
+    if account is not None:
+        raise click.UsageError("--account works on one chain, not with --chain all")
+    report = _cross_chain_report(options, days)
+    if as_json:
+        click.echo(json.dumps(report.model_dump(mode="json"), indent=2))
+        return
+    for line in metrics_table(report):
+        click.echo(line)
+
+
 @_with_indexer
-def metrics(indexer: Indexer, days: int, account: str | None) -> None:
-    """Print metrics over stored transactions as JSON; fees are in the chain's base unit."""
+def _chain_metrics(indexer: Indexer, days: int, account: str | None) -> None:
     report = indexer.metrics(days, account=account)
     click.echo(json.dumps(report.model_dump(mode="json"), indent=2))
+
+
+@cli.command()
+@click.option(
+    "--format",
+    "report_format",
+    type=click.Choice(REPORT_FORMATS),
+    default="html",
+    show_default=True,
+)
+@click.option(
+    "--output",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="File to write; standard output without it.",
+)
+@click.option("--days", type=click.IntRange(min=1), default=30, show_default=True)
+@click.pass_obj
+def report(options: _Options, report_format: str, output: Path | None, days: int) -> None:
+    """Compare every stored chain: activity, fees and active accounts, as an offline HTML
+    page, CSV or JSON."""
+    text = write_report(_cross_chain_report(options, days), report_format, output)
+    if text is not None:
+        click.echo(text.rstrip("\n"))
+
+
+def _cross_chain_report(options: _Options, days: int) -> CrossChainReport:
+    # A chain that fails reports its error in its own row, so nothing here raises.
+    with options.open_cross_chain() as everything:
+        return everything.metrics(days)
 
 
 @cli.command()
@@ -304,18 +395,43 @@ def metrics(indexer: Indexer, days: int, account: str | None) -> None:
 @click.option("--account", help="Limit to one synced account.")
 @click.option("--days", type=click.IntRange(min=1), help="Limit to the last N days.")
 @click.pass_obj
-@_with_indexer
 def export(
-    indexer: Indexer,
+    options: _Options,
     export_format: str,
     output: Path | None,
     account: str | None,
     days: int | None,
 ) -> None:
-    """Export stored transactions."""
-    text = indexer.export(export_format, output, account=account, days=days)
+    """Export stored transactions. With --chain all, every chain in one table."""
+    if options.all_chains:
+        if account is not None:
+            raise click.UsageError("--account works on one chain, not with --chain all")
+        text = _cross_chain_export(options, export_format, output, days)
+    else:
+        text = _chain_export(options, export_format, output, account, days)
     if text is not None:
         click.echo(text.rstrip("\n"))
+
+
+def _cross_chain_export(
+    options: _Options, export_format: str, output: Path | None, days: int | None
+) -> str | None:
+    with options.open_cross_chain() as everything:
+        try:
+            return everything.export(export_format, output, days=days)
+        except IndexerError as exc:
+            raise click.ClickException(str(exc)) from None
+
+
+@_with_indexer
+def _chain_export(
+    indexer: Indexer,
+    export_format: str,
+    output: Path | None,
+    account: str | None,
+    days: int | None,
+) -> str | None:
+    return indexer.export(export_format, output, account=account, days=days)
 
 
 @cli.command("pq-status")
