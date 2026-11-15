@@ -53,7 +53,9 @@ docker compose run --rm indexer --chain bitcoin sync mgdKMwnT4S5gbx55Uw3tRJchUSr
 curl http://127.0.0.1:8000/chains
 ```
 
-The HTTP API is published on this machine's `127.0.0.1:8000` only. API keys in `.env` reach
-the indexer container; the database password comes from `POSTGRES_PASSWORD`. A CI job builds
+The HTTP API is published on this machine's `127.0.0.1:8000` only. Because `serve` never
+migrates, the compose file runs an ordinary command first, which brings the schema up to date.
+API keys in `.env` reach the indexer container; the database password comes from
+`POSTGRES_PASSWORD`. A CI job builds
 the image, starts both services, and checks the API, a cross-chain command and the migrated
 schema.

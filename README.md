@@ -711,8 +711,9 @@ serves the database read-only on `http://127.0.0.1:8000`: the stored chains, tra
 pages, metrics per chain and across chains, and accounts as `index account` last stored them,
 with OpenAPI docs at `/docs`. By default no request reaches the network or writes to the
 database; `--live-accounts` lets account lookups read the chain and store the new state. It
-listens on localhost unless `--host` says otherwise, and holds each client to 120 requests a
-minute. Routes and examples are on the [HTTP API page](https://majidali32ms-lang.github.io/multichain-analytics-indexer/http-api/).
+never migrates the database: one at an older schema is refused with the command that upgrades
+it. It listens on localhost unless `--host` says otherwise, and holds each client to 120
+requests a minute. Routes and examples are on the [HTTP API page](https://majidali32ms-lang.github.io/multichain-analytics-indexer/http-api/).
 
 ## Adding a chain
 

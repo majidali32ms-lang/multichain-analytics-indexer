@@ -12,6 +12,7 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import Connection, create_engine, inspect
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -52,14 +53,36 @@ def upgrade(
         engine.dispose()
 
 
-def current_revision(sqlalchemy_url: str) -> str | None:
-    """Return the revision the database is at, or None if it has never been migrated."""
-    engine = create_engine(sqlalchemy_url)
+def head_revision() -> str:
+    """Return the newest revision this version of the package migrates to."""
+    head = ScriptDirectory(str(MIGRATIONS)).get_current_head()
+    if head is None:
+        raise ConfigError("the package ships no database migrations")
+    return head
+
+
+def current_revision(
+    sqlalchemy_url: str,
+    *,
+    redact: tuple[str, ...] = (),
+    connect_args: Mapping[str, object] | None = None,
+) -> str | None:
+    """Return the revision the database is at, or None if it has never been migrated.
+
+    Only reads, so a read-only database user or connection is enough.
+
+    Raises:
+        ConfigError: The database cannot be reached.
+    """
+    engine = create_engine(sqlalchemy_url, connect_args=dict(connect_args or {}))
     try:
         with engine.connect() as connection:
             if not inspect(connection).has_table(VERSION_TABLE):
                 return None
-            return connection.exec_driver_sql(f"SELECT version_num FROM {VERSION_TABLE}").scalar()
+            revision = connection.exec_driver_sql(f"SELECT version_num FROM {VERSION_TABLE}")
+            return revision.scalar()
+    except SQLAlchemyError as exc:
+        raise ConfigError(f"cannot read the database: {_first_line(exc, redact)}") from None
     finally:
         engine.dispose()
 

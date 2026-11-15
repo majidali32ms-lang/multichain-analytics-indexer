@@ -63,6 +63,8 @@ class AsyncIndexer:
         settings: Configuration; read from ``.env`` and the environment when None.
         database: SQLite file or PostgreSQL URL; overrides ``MCI_DATABASE_URL`` and the
             configured file.
+        migrate: Bring the database to the current schema first. ``serve`` turns this off
+            because it never writes, after checking the schema is already current.
 
     Raises:
         UnsupportedChain: The chain is unknown or not available in this version.
@@ -76,12 +78,13 @@ class AsyncIndexer:
         *,
         settings: Settings | None = None,
         database: Database | None = None,
+        migrate: bool = True,
     ) -> None:
         config = settings or Settings.from_env()
         self._cache = ResponseCache(config.cache_path) if config.cache_path else None
         chosen = network or config.default_networks.get(chain)
         self._indexer = create_indexer(chain, chosen, config, self._cache)
-        self._storage = open_storage(chosen_database(config, database))
+        self._storage = open_storage(chosen_database(config, database), migrate=migrate)
         self._pipeline = Pipeline(self._indexer, self._storage)
 
     @property
@@ -260,11 +263,14 @@ class Indexer:
         *,
         settings: Settings | None = None,
         database: Database | None = None,
+        migrate: bool = True,
     ) -> None:
         self._thread = _LoopThread()
         try:
             self._inner = self._thread.call(
-                lambda: AsyncIndexer(chain, network, settings=settings, database=database)
+                lambda: AsyncIndexer(
+                    chain, network, settings=settings, database=database, migrate=migrate
+                )
             )
         except BaseException:
             self._thread.close()

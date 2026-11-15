@@ -32,6 +32,13 @@ services:
         required: false
     environment:
       MCI_DATABASE_URL: postgresql://indexer:${POSTGRES_PASSWORD}@db:5432/indexer
+    # serve never writes, not even a migration, so an ordinary command brings the database
+    # schema up to date before each command this service runs.
+    entrypoint:
+      - sh
+      - -c
+      - multichain-indexer --chain all metrics > /dev/null && exec multichain-indexer "$$@"
+      - multichain-indexer
     command: ["serve", "--host", "0.0.0.0"]
     ports:
       - "127.0.0.1:8000:8000"

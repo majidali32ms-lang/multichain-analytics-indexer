@@ -61,8 +61,18 @@ multichain-indexer --chain bitcoin --network testnet4 index account mgdKMwnT4S5g
 `serve --live-accounts`, off by default, lets account lookups read the chain and keep the new
 state, exactly as `index account` does. That is the only way a request can reach a public
 endpoint or write to the database. Account lookups read a SQLite database through a read-only
-connection. When `serve` starts it brings the database schema up to date once, as every command
-does; a database already at the current schema is not changed.
+connection.
+
+`serve` never migrates the database either, so a read-only PostgreSQL user is enough. When it
+starts it checks, without writing, that the database is at the schema this version expects. A
+database that is missing, or older, such as one 0.6.0 wrote, is refused with a message that says
+how to upgrade it: run any other command on the same database once, for example
+
+```bash
+multichain-indexer --db indexer.db --chain all metrics
+```
+
+and start `serve` again. A database already at the current schema is served as it is.
 
 ## Safety
 

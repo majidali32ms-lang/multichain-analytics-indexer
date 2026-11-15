@@ -31,7 +31,9 @@ Adds what only a tool for many chains can do: every chain at once.
   OpenAPI docs, pages of stored transactions, metrics per chain and across chains, accounts as
   `index account` last stored them, and a request limit per client. By default no request
   reaches the network or writes to the database; `serve --live-accounts` lets account lookups
-  read the chain and store the new state.
+  read the chain and store the new state. `serve` never migrates: a database that is missing or
+  at an older schema is refused with the command that upgrades it, so a read-only database user
+  is enough.
 - Plugins: other packages add chains through the entry point group
   `multichain_indexer.adapters`, imported only when used and never under a built-in chain's name.
   A tested template is in `examples/plugin-template`, with a guide in the docs. `--network`

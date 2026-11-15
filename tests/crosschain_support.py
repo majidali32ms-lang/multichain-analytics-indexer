@@ -8,7 +8,7 @@ from multichain_indexer.adapters.algorand.parser import parse_transaction as par
 from multichain_indexer.adapters.bitcoin.esplora import parse_esplora_transaction
 from multichain_indexer.adapters.bitcoin.parser import parse_transaction as parse_bitcoin
 from multichain_indexer.core.models import TransactionRecord
-from multichain_indexer.core.storage import SQLiteStorage
+from multichain_indexer.db import open_storage
 from tests.bitcoin_support import fixture
 from tests.conftest import load_fixture
 
@@ -25,8 +25,8 @@ def bitcoin_mainnet_record() -> TransactionRecord:
 
 
 def write_two_chains(path: Path) -> Path:
-    """Store Algorand testnet and Bitcoin mainnet records in a database at ``path``."""
-    storage = SQLiteStorage(path)
+    """Store Algorand testnet and Bitcoin mainnet records in a migrated database at ``path``."""
+    storage = open_storage(path)
     try:
         storage.save_transactions("algorand", "testnet", ALGO_ACCOUNT, algorand_records())
         storage.save_transactions("bitcoin", "mainnet", "key", [bitcoin_mainnet_record()])

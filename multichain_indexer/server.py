@@ -4,9 +4,10 @@ Needs the ``serve`` extra: ``pip install multichain-analytics-indexer[serve]``. 
 is a GET. By default nothing a request does reaches the network or writes to the database: an
 account is answered from the state ``index account`` last stored. Only with
 ``live_accounts`` (``serve --live-accounts``) does an account lookup read the chain and keep
-the new state, as ``index account`` does. The schema is brought up to date once, when the app
-is built, as every command does. It listens on 127.0.0.1 unless told otherwise, and each
-client is held to a request rate. OpenAPI is served at ``/openapi.json`` and ``/docs``.
+the new state, as ``index account`` does. It never migrates the database: if the schema is not
+current it refuses to start and says which command upgrades it, so a read-only database user
+is enough. It listens on 127.0.0.1 unless told otherwise, and each client is held to a request
+rate. OpenAPI is served at ``/openapi.json`` and ``/docs``.
 
 Amounts and fees in transactions are strings, as in exports, because JSON readers such as
 JavaScript lose integers past 2**53.
@@ -39,7 +40,7 @@ from multichain_indexer.core.errors import (
 from multichain_indexer.core.models import MetricsReport, TransactionRecord
 from multichain_indexer.core.registry import available_chains
 from multichain_indexer.crosschain import AsyncCrossChain, CrossChainReport
-from multichain_indexer.db import Database, chosen_database, open_storage
+from multichain_indexer.db import Database, chosen_database, require_current_schema
 from multichain_indexer.db.snapshots import stored_account
 
 LOCAL_HOST = "127.0.0.1"
@@ -122,16 +123,20 @@ def create_app(
         clock: Time source for the rate limit, replaceable in tests.
 
     Raises:
-        ConfigError: The database cannot be opened or migrated.
+        ConfigError: The database cannot be reached or is not at the current schema; the
+            message says how to upgrade it.
     """
     config = settings or Settings.from_env()
     target = chosen_database(config, database)
-    open_storage(target).close()
+    require_current_schema(target)
+    everything = AsyncCrossChain(settings=config, database=target, migrate=False)
     allowance = ClientRateLimit(requests_per_minute, clock)
 
     @asynccontextmanager
     async def opened(chain: str, network: str) -> AsyncIterator[AsyncIndexer]:
-        async with AsyncIndexer(chain, network, settings=config, database=target) as indexer:
+        async with AsyncIndexer(
+            chain, network, settings=config, database=target, migrate=False
+        ) as indexer:
             yield indexer
 
     app = FastAPI(
@@ -165,7 +170,7 @@ def create_app(
 
     @app.get("/chains")
     async def chains() -> Chains:
-        stored = AsyncCrossChain(settings=config, database=target).networks()
+        stored = everything.networks()
         return Chains(
             available=list(available_chains()),
             stored=[{"chain": chain, "network": network} for chain, network in stored],
@@ -175,7 +180,7 @@ def create_app(
     async def cross_chain_metrics(
         days: Annotated[int, Query(ge=1)] = 30,
     ) -> CrossChainReport:
-        return await AsyncCrossChain(settings=config, database=target).metrics(days)
+        return await everything.metrics(days)
 
     @app.get("/chains/{chain}/{network}/metrics")
     async def chain_metrics(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sqlite3
 import sys
 from pathlib import Path
 from typing import Any
@@ -17,9 +18,12 @@ from pydantic import SecretStr
 from multichain_indexer import CrossChain, Indexer, db, server
 from multichain_indexer.cli import cli
 from multichain_indexer.core.config import Settings
+from multichain_indexer.core.errors import ConfigError
+from multichain_indexer.db import open_storage
 from multichain_indexer.server import ClientRateLimit, create_app
 from tests.bitcoin_support import SMALL, serve_small
 from tests.conftest import FakeNode
+from tests.test_migrations import RELEASED_DUMP
 
 ALL_TIME = 36500
 
@@ -144,6 +148,7 @@ def test_live_accounts_read_the_chain_and_store_the_state_as_index_account_does(
 ) -> None:
     serve_small(node)
     database = tmp_path / "a.db"
+    open_storage(database).close()
     live = TestClient(create_app(settings=btc_settings, database=database, live_accounts=True))
     served = live.get(f"/chains/bitcoin/testnet4/accounts/{SMALL}").json()
     with Indexer("bitcoin", settings=btc_settings, database=tmp_path / "b.db") as indexer:
@@ -189,6 +194,7 @@ def test_a_network_error_is_a_bad_gateway(tmp_path: Path) -> None:
         request_timeout=1,
         env={"BITCOIN_TESTNET4_ESPLORA_SERVER": SecretStr("http://127.0.0.1:9")},
     )
+    open_storage(settings.database).close()
     reply = TestClient(create_app(settings=settings, live_accounts=True)).get(
         f"/chains/bitcoin/testnet4/accounts/{SMALL}"
     )
@@ -243,6 +249,7 @@ def test_serve_listens_on_localhost_unless_told_otherwise(
 ) -> None:
     calls: list[dict[str, Any]] = []
     monkeypatch.setattr(uvicorn, "run", lambda app, **options: calls.append(options))
+    open_storage(tmp_path / "s.db").close()
     options = ["--db", str(tmp_path / "s.db"), "--env-file", str(tmp_path / "no.env")]
     local = CliRunner().invoke(cli, [*options, "serve"])
     assert local.exit_code == 0, local.output
@@ -292,6 +299,7 @@ def test_serve_passes_live_accounts_and_reports_a_bad_database_cleanly(
 
     monkeypatch.setattr(server, "create_app", recording_create_app)
     monkeypatch.setattr(uvicorn, "run", lambda app, **options: None)
+    open_storage(tmp_path / "s.db").close()
     options = ["--db", str(tmp_path / "s.db"), "--env-file", str(tmp_path / "no.env")]
     assert CliRunner().invoke(cli, [*options, "serve"]).exit_code == 0
     assert CliRunner().invoke(cli, [*options, "serve", "--live-accounts"]).exit_code == 0
@@ -301,6 +309,51 @@ def test_serve_passes_live_accounts_and_reports_a_bad_database_cleanly(
     url = "postgresql://indexer:not-a-real-password@127.0.0.1:1/indexer"
     failed = CliRunner().invoke(cli, ["--db", url, "--env-file", str(tmp_path / "no.env"), "serve"])
     assert failed.exit_code == 1
-    assert "cannot migrate the database" in failed.output
+    assert "cannot read the database" in failed.output
     assert "not-a-real-password" not in failed.output
     assert "Traceback" not in failed.output
+
+
+def test_serve_never_migrates_and_refuses_an_older_schema(tmp_path: Path) -> None:
+    older = tmp_path / "older.db"
+    connection = sqlite3.connect(older)
+    connection.executescript(RELEASED_DUMP.read_text(encoding="utf-8"))
+    connection.close()
+    before = hashlib.sha256(older.read_bytes()).hexdigest()
+    with pytest.raises(ConfigError) as refused:
+        create_app(settings=Settings(database=tmp_path / "unused.db"), database=older)
+    message = str(refused.value)
+    assert "schema revision none and this version needs 0001" in message
+    assert "multichain-indexer --db <the same database> --chain all metrics" in message
+    assert hashlib.sha256(older.read_bytes()).hexdigest() == before
+
+    upgraded = CliRunner().invoke(
+        cli, ["--db", str(older), "--env-file", str(tmp_path / "e"), "--chain", "all", "metrics"]
+    )
+    assert upgraded.exit_code == 0
+    create_app(settings=Settings(database=tmp_path / "unused.db"), database=older)
+
+
+def test_serve_refuses_a_database_that_does_not_exist_and_creates_none(tmp_path: Path) -> None:
+    missing = tmp_path / "missing.db"
+    with pytest.raises(ConfigError, match="no database at"):
+        create_app(settings=Settings(database=tmp_path / "unused.db"), database=missing)
+    assert not missing.exists()
+    result = CliRunner().invoke(
+        cli, ["--db", str(missing), "--env-file", str(tmp_path / "e"), "serve"]
+    )
+    assert result.exit_code == 1
+    assert "no database at" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_no_request_migrates_the_database(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def refuse(*arguments: object, **options: object) -> None:
+        raise AssertionError("serve tried to migrate the database")
+
+    monkeypatch.setattr(db, "upgrade", refuse)
+    routes = ["/chains", "/metrics", "/chains/algorand/testnet/metrics"]
+    routes.append("/chains/algorand/testnet/transactions")
+    assert [client.get(route).status_code for route in routes] == [200, 200, 200, 200]

@@ -23,7 +23,7 @@ from multichain_indexer.cli import cli
 from multichain_indexer.core.config import Settings
 from multichain_indexer.core.errors import ConfigError
 from multichain_indexer.core.storage import SQLiteStorage
-from multichain_indexer.db import chosen_database, database_secrets, open_storage
+from multichain_indexer.db import chosen_database, database_secrets, migrate, open_storage
 from multichain_indexer.db.migrate import BASELINE, current_revision, upgrade
 from multichain_indexer.db.snapshots import stored_account
 
@@ -190,3 +190,16 @@ def test_reading_a_snapshot_hides_the_database_password(monkeypatch: pytest.Monk
     with pytest.raises(ConfigError, match="cannot read the database") as failed:
         stored_account(url, "bitcoin", "testnet4", "tb1q")
     assert PASSWORD not in str(failed.value)
+
+
+def test_a_package_without_migrations_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Empty:
+        def __init__(self, folder: str) -> None:
+            self.folder = folder
+
+        def get_current_head(self) -> None:
+            return None
+
+    monkeypatch.setattr(migrate, "ScriptDirectory", Empty)
+    with pytest.raises(ConfigError, match="ships no database migrations"):
+        migrate.head_revision()

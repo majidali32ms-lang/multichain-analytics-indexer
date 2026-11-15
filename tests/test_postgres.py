@@ -110,3 +110,10 @@ def test_a_snapshot_keeps_the_latest_state_as_jsonb(node: FakeNode, btc_settings
         f"/chains/bitcoin/testnet4/accounts/{SMALL}"
     )
     assert served.json() == latest.model_dump(mode="json")
+
+
+def test_serve_refuses_a_postgresql_database_that_was_never_migrated() -> None:
+    url = postgres_url()
+    with pytest.raises(ConfigError, match="schema revision none and this version needs 0001"):
+        create_app(settings=Settings(), database=url)
+    assert current_revision(sqlalchemy_url(url)) is None

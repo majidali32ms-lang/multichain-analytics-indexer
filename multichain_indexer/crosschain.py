@@ -85,17 +85,23 @@ class AsyncCrossChain:
             when None.
         database: SQLite file or PostgreSQL URL; overrides ``MCI_DATABASE_URL`` and the
             configured file.
+        migrate: Bring the database to the current schema first; see ``AsyncIndexer``.
     """
 
     def __init__(
-        self, *, settings: Settings | None = None, database: Database | None = None
+        self,
+        *,
+        settings: Settings | None = None,
+        database: Database | None = None,
+        migrate: bool = True,
     ) -> None:
         self._settings = settings or Settings.from_env()
         self._database = chosen_database(self._settings, database)
+        self._migrate = migrate
 
     def networks(self) -> list[tuple[str, str]]:
         """Return every chain and network with stored transactions."""
-        storage = open_storage(self._database)
+        storage = open_storage(self._database, migrate=self._migrate)
         try:
             return storage.stored_networks()
         finally:
@@ -145,7 +151,13 @@ class AsyncCrossChain:
         return export_transactions(records, export_format, output)
 
     def _open(self, chain: str, network: str) -> AsyncIndexer:
-        return AsyncIndexer(chain, network, settings=self._settings, database=self._database)
+        return AsyncIndexer(
+            chain,
+            network,
+            settings=self._settings,
+            database=self._database,
+            migrate=self._migrate,
+        )
 
     async def _chain_metrics(self, chain: str, network: str, days: int) -> ChainMetrics:
         try:
