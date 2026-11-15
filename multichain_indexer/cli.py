@@ -14,7 +14,7 @@ from typing import Concatenate, ParamSpec, TextIO, TypeVar
 import click
 
 from multichain_indexer.api import Indexer
-from multichain_indexer.core.config import Settings
+from multichain_indexer.core.config import DEFAULT_CONFIG_FILE, Settings
 from multichain_indexer.core.errors import ConfigError, IndexerError, InvalidInput
 from multichain_indexer.core.export import EXPORT_FORMATS
 from multichain_indexer.core.models import SyncResult, TransactionRecord
@@ -109,14 +109,21 @@ def _with_indexer(
 )
 @click.option(
     "--network",
-    type=click.Choice(["mainnet", "testnet", "devnet", "testnet4", "signet", "localnet"]),
     help=(
-        "Network to read. Defaults to Algorand testnet, Solana devnet, NEAR testnet, the "
-        "EVM chain's testnet, such as Sepolia, or Bitcoin testnet4."
+        "Network to read, such as mainnet, testnet, devnet, testnet4, signet or localnet. "
+        "Defaults to the chain's network in config.toml, else Algorand testnet, Solana "
+        "devnet, NEAR testnet, the EVM chain's testnet, such as Sepolia, or Bitcoin testnet4."
     ),
 )
 @click.option("--db", "database", type=click.Path(dir_okay=False, path_type=Path))
 @click.option("--env-file", default=".env", show_default=True)
+@click.option(
+    "--config",
+    "config_file",
+    default=DEFAULT_CONFIG_FILE,
+    show_default=True,
+    help="Endpoints, networks, accounts and prices; never secrets.",
+)
 @click.option("-v", "--verbose", is_flag=True, help="Log progress as well as problems.")
 @click.option("-q", "--quiet", is_flag=True, help="Log errors only and hide sync progress.")
 @click.pass_context
@@ -126,12 +133,13 @@ def cli(
     network: str | None,
     database: Path | None,
     env_file: str,
+    config_file: str,
     verbose: bool,
     quiet: bool,
 ) -> None:
     """Index and analyse blockchain accounts and transactions."""
     try:
-        settings = Settings.from_env(env_file)
+        settings = Settings.from_env(env_file, config_file=config_file)
     except IndexerError as exc:
         raise click.ClickException(str(exc)) from None
     configure_logging(verbose=verbose, quiet=quiet, secrets=settings.secret_values())

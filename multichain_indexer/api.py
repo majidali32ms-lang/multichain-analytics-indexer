@@ -52,7 +52,8 @@ class AsyncIndexer:
 
     Args:
         chain: Chain name, such as ``"algorand"``.
-        network: Network name; the chain's test network when None.
+        network: Network name; when None, the chain's network in ``config.toml``, else its
+            test network.
         settings: Configuration; read from ``.env`` and the environment when None.
         database: Database file; overrides the configured one.
 
@@ -71,7 +72,8 @@ class AsyncIndexer:
     ) -> None:
         config = settings or Settings.from_env()
         self._cache = ResponseCache(config.cache_path) if config.cache_path else None
-        self._indexer = create_indexer(chain, network, config, self._cache)
+        chosen = network or config.default_networks.get(chain)
+        self._indexer = create_indexer(chain, chosen, config, self._cache)
         self._storage = SQLiteStorage(database or config.database)
         self._pipeline = Pipeline(self._indexer, self._storage)
 
