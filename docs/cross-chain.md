@@ -138,7 +138,8 @@ esplora_server = "https://my-esplora.example/signet/api"
 
 `[chains.<chain>.<network>]` entries become the same settings `.env` takes, here
 `BITCOIN_SIGNET_ESPLORA_SERVER`. A chain's `network` becomes its default, but mainnet is
-always chosen with `--network mainnet`. The file is meant to be shared, so it never holds
+always chosen with `--network mainnet` on the command line: `network = "mainnet"` in
+`config.toml` is refused with an error that says to pass `--network mainnet` instead. The file is meant to be shared, so it never holds
 secrets: a key ending in `_API_KEY` or `_TOKEN` is refused with an error that names the key
 and never shows its value. Keys, and a database URL with a password, belong in `.env`.
 

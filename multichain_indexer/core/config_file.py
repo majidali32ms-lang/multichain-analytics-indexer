@@ -113,7 +113,8 @@ def _default_network(value: object, chain: str) -> str:
     network = _scalar(value, f"chains.{chain}.network")
     if network == MAINNET:
         raise ConfigError(
-            f"chains.{chain}.network cannot be mainnet; mainnet is used only with --network mainnet"
+            f"chains.{chain}.network cannot be mainnet in config.toml; "
+            "pass --network mainnet on the command line to read mainnet"
         )
     return network
 

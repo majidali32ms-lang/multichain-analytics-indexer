@@ -651,7 +651,9 @@ Last 365 days. US dollars only for mainnet, at the price in config.toml.
   chain's `native` block as a JSON column, so it loads into one pandas DataFrame.
 - `--chain all sync` syncs the accounts listed under `[accounts]` in `config.toml`, chains in
   parallel. A chain that fails shows its error and the others carry on.
-- `sync ADDRESS --follow` keeps syncing one account as new transactions arrive, until Ctrl-C.
+- `sync ADDRESS --follow` keeps syncing one account as new transactions arrive, until Ctrl-C,
+  pausing between rounds 60 s on Bitcoin, 30 s on Solana and NEAR, 15 s on the EVM chains,
+  10 s on Algorand and 30 s on plugin chains; `--interval` changes it.
 - Fees are in each chain's own unit, and in US dollars only for mainnet, at a price and date
   you give in `config.toml`. Nothing is fetched from a price service.
 - Chains that share a provider key (Blockscout, Etherscan, NodeReal, Alchemy) share one rate
@@ -667,7 +669,8 @@ Endpoints, default networks, accounts and prices can live in `config.toml`, in t
 folder or wherever `--config` points. `.env` and the environment win over it. It never holds
 secrets: a key ending in `_API_KEY` or `_TOKEN` there is refused, with an error that names the
 key and not its value. A chain's default network can be set there, but mainnet always needs
-`--network mainnet`.
+`--network mainnet` on the command line: `network = "mainnet"` in `config.toml` is refused
+with an error that says to pass `--network mainnet` instead.
 
 ```toml
 [chains.bitcoin]

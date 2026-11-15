@@ -116,7 +116,7 @@ def test_the_command_line_reports_a_secret_in_one_line_without_its_value(tmp_pat
 @pytest.mark.parametrize(
     ("text", "message"),
     [
-        ('[chains.bitcoin]\nnetwork = "mainnet"\n', "only with --network mainnet"),
+        ('[chains.bitcoin]\nnetwork = "mainnet"\n', "pass --network mainnet on the command line"),
         ("[wallets]\nx = 1\n", "unknown config.toml section 'wallets'"),
         ("[settings\n", "not valid TOML"),
         ("chains = 3\n", "chains must be a table"),
