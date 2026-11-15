@@ -27,7 +27,7 @@ classifiers = [
 dependencies = [
     "aiohttp>=3.11,<4",
     "base58>=2.1,<3",
-    "click>=8.1,<9",
+    "click>=8.5,<9",
     "embit==0.8.0",
     "pandas>=2.2,<4",
     "py-algorand-sdk>=2.12,<3",
@@ -96,7 +96,9 @@ ignore = ["N818"]
 
 [tool.mypy]
 strict = true
-packages = ["multichain_indexer"]
+# The plugin template is checked as strictly as the package it plugs into.
+mypy_path = "examples/plugin-template/src"
+packages = ["multichain_indexer", "examplechain_indexer"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]

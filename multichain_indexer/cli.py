@@ -15,11 +15,11 @@ import click
 
 from multichain_indexer.api import Indexer
 from multichain_indexer.core.config import Settings
-from multichain_indexer.core.errors import IndexerError, InvalidInput
+from multichain_indexer.core.errors import ConfigError, IndexerError, InvalidInput
 from multichain_indexer.core.export import EXPORT_FORMATS
 from multichain_indexer.core.models import SyncResult, TransactionRecord
 from multichain_indexer.core.observability import configure_logging
-from multichain_indexer.core.registry import PLANNED_CHAINS
+from multichain_indexer.core.registry import PLANNED_CHAINS, available_chains
 from multichain_indexer.pq import PQ_STATUS
 
 if sys.platform == "win32":
@@ -43,6 +43,23 @@ CLOSED_PIPE_ERRNOS = frozenset({errno.EPIPE, errno.EINVAL})
 # What Windows reports for a write to a pipe whose reader has gone: ERROR_NO_DATA ("the pipe
 # is being closed") and ERROR_BROKEN_PIPE.
 WINDOWS_CLOSED_PIPE_ERRORS = frozenset({232, 109})
+
+
+class _ChainName(click.ParamType[str]):
+    """A built-in or plugin chain. Installed plugins are looked up only when it is used."""
+
+    name = "chain"
+
+    def convert(self, value: str, param: click.Parameter | None, ctx: click.Context | None) -> str:
+        try:
+            chains = available_chains()
+        except ConfigError as exc:
+            self.fail(str(exc), param, ctx)
+        if value not in chains:
+            self.fail(
+                f"{value!r} is not a known chain; choose from {', '.join(chains)}", param, ctx
+            )
+        return value
 
 
 class _Options:
@@ -85,10 +102,10 @@ def _with_indexer(
 @click.group()
 @click.option(
     "--chain",
-    type=click.Choice(PLANNED_CHAINS),
+    type=_ChainName(),
     default="algorand",
     show_default=True,
-    help="Chain to work on. Chains not yet supported say so when used.",
+    help=f"Chain to work on: {', '.join(PLANNED_CHAINS)}, or a chain an installed plugin adds.",
 )
 @click.option(
     "--network",
