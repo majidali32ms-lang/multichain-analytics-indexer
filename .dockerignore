@@ -1,0 +1,8 @@
+# Send only what the image is built from; never .env, databases or the virtualenv.
+*
+!pyproject.toml
+!uv.lock
+!README.md
+!LICENSE
+!multichain_indexer/
+**/__pycache__

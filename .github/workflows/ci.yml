@@ -58,6 +58,26 @@ jobs:
         env:
           MCI_TEST_DATABASE_URL: postgresql://postgres@localhost:5432/indexer
 
+  docker:
+    runs-on: ubuntu-latest
+    env:
+      # A throwaway password for this run's database, never stored anywhere.
+      POSTGRES_PASSWORD: ci-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker compose build
+      - run: docker compose up --detach --wait
+      - run: >-
+          curl --fail --silent --show-error --retry 10 --retry-connrefused --retry-delay 2
+          http://127.0.0.1:8000/health
+      - run: docker compose run --rm indexer --chain all metrics
+      - run: docker compose run --rm indexer pq-status
+      - run: docker compose exec --no-TTY db psql -U indexer -d indexer -c "SELECT version_num FROM alembic_version"
+      - if: always()
+        run: docker compose logs
+      - if: always()
+        run: docker compose down --volumes
+
   live:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
