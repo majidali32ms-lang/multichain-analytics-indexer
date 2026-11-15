@@ -25,6 +25,7 @@ from multichain_indexer.core.errors import ConfigError
 from multichain_indexer.core.storage import SQLiteStorage
 from multichain_indexer.db import chosen_database, database_secrets, open_storage
 from multichain_indexer.db.migrate import BASELINE, current_revision, upgrade
+from multichain_indexer.db.snapshots import stored_account
 
 RELEASED_DUMP = Path(__file__).parent / "fixtures" / "db" / "indexer-0.6.0.sql"
 RELEASED_DUMP_SHA256 = "5d907ba97ccefb83bc86eb0c79dd59806ec1507a65c79f17b82232483b89f2ee"
@@ -174,3 +175,18 @@ def test_the_command_line_hides_the_password_of_an_unreachable_database(
     assert "cannot migrate the database" in result.output
     assert PASSWORD not in result.output
     assert "Traceback" not in result.output
+
+
+def test_reading_a_snapshot_never_creates_a_database(tmp_path: Path) -> None:
+    missing = tmp_path / "missing.db"
+    with pytest.raises(ConfigError, match="cannot read the database"):
+        stored_account(missing, "bitcoin", "testnet4", "tb1q")
+    assert not missing.exists()
+
+
+def test_reading_a_snapshot_hides_the_database_password(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(db, "CONNECT_TIMEOUT_SECONDS", 1)
+    url = f"postgresql://indexer:{PASSWORD}@127.0.0.1:1/indexer"
+    with pytest.raises(ConfigError, match="cannot read the database") as failed:
+        stored_account(url, "bitcoin", "testnet4", "tb1q")
+    assert PASSWORD not in str(failed.value)

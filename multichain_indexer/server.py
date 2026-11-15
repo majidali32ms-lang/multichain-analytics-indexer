@@ -1,10 +1,12 @@
 """A read-only HTTP API over the local database: ``multichain-indexer serve``.
 
 Needs the ``serve`` extra: ``pip install multichain-analytics-indexer[serve]``. Every route
-is a GET and none changes stored transactions; an account lookup reads the chain and keeps
-the account's latest state, as ``index account`` does. It listens on 127.0.0.1 unless told
-otherwise, and each client is held to a request rate so one script cannot hammer the public
-endpoints that account lookups reach. OpenAPI is served at ``/openapi.json`` and ``/docs``.
+is a GET. By default nothing a request does reaches the network or writes to the database: an
+account is answered from the state ``index account`` last stored. Only with
+``live_accounts`` (``serve --live-accounts``) does an account lookup read the chain and keep
+the new state, as ``index account`` does. The schema is brought up to date once, when the app
+is built, as every command does. It listens on 127.0.0.1 unless told otherwise, and each
+client is held to a request rate. OpenAPI is served at ``/openapi.json`` and ``/docs``.
 
 Amounts and fees in transactions are strings, as in exports, because JSON readers such as
 JavaScript lose integers past 2**53.
@@ -34,10 +36,11 @@ from multichain_indexer.core.errors import (
     NotFound,
     UnsupportedChain,
 )
-from multichain_indexer.core.models import AccountRecord, MetricsReport, TransactionRecord
+from multichain_indexer.core.models import MetricsReport, TransactionRecord
 from multichain_indexer.core.registry import available_chains
 from multichain_indexer.crosschain import AsyncCrossChain, CrossChainReport
-from multichain_indexer.db import Database, chosen_database
+from multichain_indexer.db import Database, chosen_database, open_storage
+from multichain_indexer.db.snapshots import stored_account
 
 LOCAL_HOST = "127.0.0.1"
 DEFAULT_PORT = 8000
@@ -105,6 +108,7 @@ def create_app(
     settings: Settings | None = None,
     database: Database | None = None,
     requests_per_minute: int = DEFAULT_REQUESTS_PER_MINUTE,
+    live_accounts: bool = False,
     clock: Clock = time.monotonic,
 ) -> FastAPI:
     """Build the API over ``database``, or the configured one.
@@ -114,10 +118,15 @@ def create_app(
             when None.
         database: SQLite file or PostgreSQL URL.
         requests_per_minute: What each client may send.
+        live_accounts: Let account lookups read the chain and store the new state.
         clock: Time source for the rate limit, replaceable in tests.
+
+    Raises:
+        ConfigError: The database cannot be opened or migrated.
     """
     config = settings or Settings.from_env()
     target = chosen_database(config, database)
+    open_storage(target).close()
     allowance = ClientRateLimit(requests_per_minute, clock)
 
     @asynccontextmanager
@@ -128,7 +137,7 @@ def create_app(
     app = FastAPI(
         title="multichain-analytics-indexer",
         version=__version__,
-        description="Read-only access to the transactions and metrics in the local database.",
+        description="Read-only access to the accounts, transactions and metrics stored locally.",
     )
 
     @app.middleware("http")
@@ -200,12 +209,28 @@ def create_app(
         )
 
     @app.get("/chains/{chain}/{network}/accounts/{address}")
-    async def account(chain: str, network: str, address: str) -> AccountRecord:
-        """Read an account's current state from the chain, as ``index account`` does."""
-        async with opened(chain, network) as indexer:
-            return await indexer.account(address)
+    async def account(chain: str, network: str, address: str) -> dict[str, JsonValue]:
+        """The account's state as ``index account`` last stored it; read from the chain only
+        when the server runs with live account lookups."""
+        if live_accounts:
+            async with opened(chain, network) as indexer:
+                return (await indexer.account(address)).model_dump(mode="json")
+        if chain not in available_chains():
+            raise UnsupportedChain(f"unknown chain {chain!r}")
+        stored = stored_account(target, chain, network, address)
+        if stored is None:
+            raise NotFound(_no_snapshot_message(chain, network, address))
+        return stored
 
     return app
+
+
+def _no_snapshot_message(chain: str, network: str, address: str) -> str:
+    lookup = f"multichain-indexer --chain {chain} --network {network} index account {address}"
+    return (
+        f"no stored state for {address} on {chain} {network}; run `{lookup}` first, "
+        "or start serve with --live-accounts"
+    )
 
 
 def _transaction_item(record: TransactionRecord) -> dict[str, JsonValue]:

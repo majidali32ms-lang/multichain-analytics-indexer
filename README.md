@@ -705,8 +705,10 @@ multichain-indexer serve
 ```
 
 serves the database read-only on `http://127.0.0.1:8000`: the stored chains, transactions in
-pages, metrics per chain and across chains, and account lookups, with OpenAPI docs at `/docs`.
-It listens on localhost unless `--host` says otherwise, and holds each client to 120 requests a
+pages, metrics per chain and across chains, and accounts as `index account` last stored them,
+with OpenAPI docs at `/docs`. By default no request reaches the network or writes to the
+database; `--live-accounts` lets account lookups read the chain and store the new state. It
+listens on localhost unless `--host` says otherwise, and holds each client to 120 requests a
 minute. Routes and examples are on the [HTTP API page](https://majidali32ms-lang.github.io/multichain-analytics-indexer/http-api/).
 
 ## Adding a chain
@@ -777,8 +779,8 @@ sync runs it shows a running count, because the total is not known in advance.
 - Addresses and IDs are validated before any request is sent.
 - `config.toml` is refused if it holds a key or token, and the error never shows the value.
 - A database URL's password never appears in logs or errors.
-- `serve` is read-only, listens on 127.0.0.1 unless told otherwise, and limits each client's
-  request rate.
+- `serve` is read-only: by default no request reaches the network or writes to the database.
+  It listens on 127.0.0.1 unless told otherwise and limits each client's request rate.
 
 See [SECURITY.md](SECURITY.md) to report a vulnerability.
 

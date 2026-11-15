@@ -44,6 +44,26 @@ def database_secrets(database: Database) -> tuple[str, ...]:
     return (password,) if password else ()
 
 
+def sqlalchemy_target(
+    database: Database, *, read_only: bool = False
+) -> tuple[str, dict[str, object]]:
+    """Return the SQLAlchemy URL and driver arguments for ``database``.
+
+    Args:
+        read_only: Open a SQLite file so that nothing can be written to it.
+    """
+    if is_postgres(database):
+        url = str(database)
+        scheme = next(prefix for prefix in POSTGRES_SCHEMES if url.startswith(prefix))
+        return SQLALCHEMY_POSTGRES + url.removeprefix(scheme), {
+            "connect_timeout": CONNECT_TIMEOUT_SECONDS
+        }
+    path = Path(database).resolve().as_posix()
+    if read_only:
+        return f"sqlite:///file:{path}?mode=ro&uri=true", {}
+    return f"sqlite:///{path}", {}
+
+
 def open_storage(database: Database) -> Storage:
     """Migrate ``database`` to the current schema, then open it.
 
@@ -55,7 +75,7 @@ def open_storage(database: Database) -> Storage:
         return _open_postgres(str(database))
     path = Path(database)
     path.parent.mkdir(parents=True, exist_ok=True)
-    upgrade(f"sqlite:///{path.resolve().as_posix()}")
+    upgrade(sqlalchemy_target(path)[0])
     return SQLiteStorage(path)
 
 
@@ -68,7 +88,6 @@ def _open_postgres(url: str) -> Storage:
             "pip install 'multichain-analytics-indexer[postgres]'"
         ) from None
     redact = database_secrets(url)
-    scheme = next(prefix for prefix in POSTGRES_SCHEMES if url.startswith(prefix))
-    timeout = {"connect_timeout": CONNECT_TIMEOUT_SECONDS}
-    upgrade(SQLALCHEMY_POSTGRES + url.removeprefix(scheme), redact=redact, connect_args=timeout)
+    sqlalchemy_url, connect_args = sqlalchemy_target(url)
+    upgrade(sqlalchemy_url, redact=redact, connect_args=connect_args)
     return PostgresStorage(url, connect_timeout=CONNECT_TIMEOUT_SECONDS, redact=redact)

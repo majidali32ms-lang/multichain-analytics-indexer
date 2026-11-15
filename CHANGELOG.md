@@ -28,8 +28,10 @@ Adds what only a tool for many chains can do: every chain at once.
   at the first revision without touching a row; a test proves it on a database the released
   0.6.0 package wrote.
 - `serve`, with the `serve` extra (FastAPI, uvicorn): a read-only HTTP API on 127.0.0.1 with
-  OpenAPI docs, pages of stored transactions, metrics per chain and across chains, account
-  lookups, and a request limit per client.
+  OpenAPI docs, pages of stored transactions, metrics per chain and across chains, accounts as
+  `index account` last stored them, and a request limit per client. By default no request
+  reaches the network or writes to the database; `serve --live-accounts` lets account lookups
+  read the chain and store the new state.
 - Plugins: other packages add chains through the entry point group
   `multichain_indexer.adapters`, imported only when used and never under a built-in chain's name.
   A tested template is in `examples/plugin-template`, with a guide in the docs. `--network`

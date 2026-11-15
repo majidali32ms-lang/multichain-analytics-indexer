@@ -16,7 +16,7 @@ the schema does not need one).
 | `GET /metrics?days=30` | every stored chain side by side, as `metrics --chain all --json` |
 | `GET /chains/{chain}/{network}/metrics?days=30&account=` | one chain's metrics, as `metrics` |
 | `GET /chains/{chain}/{network}/transactions?account=&days=&offset=0&limit=50` | stored transactions, newest first, in pages of up to 1,000 |
-| `GET /chains/{chain}/{network}/accounts/{address}` | an account read from the chain, as `index account` |
+| `GET /chains/{chain}/{network}/accounts/{address}` | the account's state as `index account` last stored it |
 
 ```bash
 curl -s "http://127.0.0.1:8000/chains/bitcoin/testnet4/transactions?limit=1"
@@ -48,13 +48,29 @@ curl -s "http://127.0.0.1:8000/chains/bitcoin/testnet4/transactions?limit=1"
 Amounts and fees in transactions are text, as in exports, because JSON readers such as
 JavaScript lose integers past 2**53. Metrics are the exact JSON `metrics` prints.
 
+## Read-only
+
+By default no request reaches the network or writes to the database. An account is answered
+from the state `index account` last stored for it; an account never looked up gets HTTP 404
+with the command to run first:
+
+```bash
+multichain-indexer --chain bitcoin --network testnet4 index account mgdKMwnT4S5gbx55Uw3tRJchUSrHwAFjzu
+```
+
+`serve --live-accounts`, off by default, lets account lookups read the chain and keep the new
+state, exactly as `index account` does. That is the only way a request can reach a public
+endpoint or write to the database. Account lookups read a SQLite database through a read-only
+connection. When `serve` starts it brings the database schema up to date once, as every command
+does; a database already at the current schema is not changed.
+
 ## Safety
 
-- Every route is a GET. None changes stored transactions; an account lookup reads the chain and
-  keeps the account's latest state, as `index account` does.
+- Every route is a GET.
 - It listens on 127.0.0.1. `--host` changes that, and the command then warns that anyone who can
   reach the address can read the database.
 - Each client may send 120 requests a minute (`--requests-per-minute`); more get HTTP 429 with
-  `Retry-After`. Account lookups reach public endpoints, which have limits of their own.
+  `Retry-After`. With `--live-accounts`, account lookups reach public endpoints, which have
+  limits of their own.
 - Errors carry the same one-line messages as the command line: 400 for bad input, 404 for an
   unknown chain or record, 502 when a public endpoint fails.

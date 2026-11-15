@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
+import uvicorn
 from click.testing import CliRunner
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 
-from multichain_indexer import CrossChain, Indexer
+from multichain_indexer import CrossChain, Indexer, db, server
 from multichain_indexer.cli import cli
 from multichain_indexer.core.config import Settings
 from multichain_indexer.server import ClientRateLimit, create_app
@@ -87,18 +90,73 @@ def test_transactions_come_in_pages_with_amounts_as_text(
     assert all(isinstance(item["amount"], str) for item in items)
 
 
-def test_an_account_is_read_from_the_chain_as_index_account_does(
+def test_by_default_an_account_is_the_state_index_account_stored(
     node: FakeNode, btc_settings: Settings, tmp_path: Path
 ) -> None:
     serve_small(node)
-    client = TestClient(create_app(settings=btc_settings, database=tmp_path / "a.db"))
-    served = client.get(f"/chains/bitcoin/testnet4/accounts/{SMALL}").json()
+    database = tmp_path / "a.db"
+    with Indexer("bitcoin", settings=btc_settings, database=database) as indexer:
+        stored = indexer.account(SMALL).model_dump(mode="json")
+    asked_before = len(node.requests)
+    client = TestClient(create_app(settings=btc_settings, database=database))
+    assert client.get(f"/chains/bitcoin/testnet4/accounts/{SMALL}").json() == stored
+    assert len(node.requests) == asked_before
+
+
+def test_an_account_never_looked_up_is_not_found_with_a_hint(client: TestClient) -> None:
+    reply = client.get(f"/chains/bitcoin/testnet4/accounts/{SMALL}")
+    assert reply.status_code == 404
+    detail = reply.json()["detail"]
+    assert f"no stored state for {SMALL} on bitcoin testnet4" in detail
+    assert f"multichain-indexer --chain bitcoin --network testnet4 index account {SMALL}" in detail
+    assert "--live-accounts" in detail
+    unknown = client.get(f"/chains/dogecoin/mainnet/accounts/{SMALL}")
+    assert (unknown.status_code, unknown.json()["detail"]) == (404, "unknown chain 'dogecoin'")
+
+
+def test_by_default_no_route_reaches_the_network_or_writes_to_the_database(
+    node: FakeNode, tmp_path: Path, working_database: Path
+) -> None:
+    env = {
+        "ALGORAND_TESTNET_INDEXER_SERVER": SecretStr(node.url),
+        "BITCOIN_MAINNET_ESPLORA_SERVER": SecretStr(node.url),
+    }
+    settings = Settings(database=tmp_path / "unused.db", env=env)
+    client = TestClient(create_app(settings=settings, database=working_database))
+    before = hashlib.sha256(working_database.read_bytes()).hexdigest()
+    routes = [
+        "/health",
+        "/chains",
+        "/metrics",
+        "/chains/algorand/testnet/metrics",
+        "/chains/algorand/testnet/transactions",
+        "/chains/bitcoin/mainnet/transactions",
+        f"/chains/bitcoin/mainnet/accounts/{SMALL}",
+        "/chains/algorand/testnet/accounts/ALGORANDACCOUNT",
+    ]
+    assert [client.get(route).status_code for route in routes] == [200] * 6 + [404, 404]
+    assert node.requests == []
+    assert hashlib.sha256(working_database.read_bytes()).hexdigest() == before
+
+
+def test_live_accounts_read_the_chain_and_store_the_state_as_index_account_does(
+    node: FakeNode, btc_settings: Settings, tmp_path: Path
+) -> None:
+    serve_small(node)
+    database = tmp_path / "a.db"
+    live = TestClient(create_app(settings=btc_settings, database=database, live_accounts=True))
+    served = live.get(f"/chains/bitcoin/testnet4/accounts/{SMALL}").json()
     with Indexer("bitcoin", settings=btc_settings, database=tmp_path / "b.db") as indexer:
-        looked_up = indexer.account(SMALL)
-    expected = looked_up.model_dump(mode="json")
-    for reading in (served, expected):
+        looked_up = indexer.account(SMALL).model_dump(mode="json")
+    stored = TestClient(create_app(settings=btc_settings, database=database)).get(
+        f"/chains/bitcoin/testnet4/accounts/{SMALL}"
+    )
+    assert stored.json() == served
+    for reading in (served, looked_up):
         reading["native"]["quantum_exposure"].pop("observed_at")
-    assert served == expected
+    assert served == looked_up
+    refused = live.get("/chains/bitcoin/testnet4/accounts/not-an-address")
+    assert refused.status_code == 400
 
 
 @pytest.mark.parametrize(
@@ -106,7 +164,6 @@ def test_an_account_is_read_from_the_chain_as_index_account_does(
     [
         ("/chains/dogecoin/mainnet/metrics", 404, "unknown chain 'dogecoin'"),
         ("/chains/bitcoin/regtest/metrics", 400, "unknown Bitcoin network"),
-        ("/chains/bitcoin/testnet4/accounts/not-an-address", 400, ""),
     ],
 )
 def test_errors_carry_a_status_and_the_message(
@@ -126,15 +183,13 @@ def test_nothing_can_be_written_and_bad_queries_are_refused(client: TestClient) 
 
 
 def test_a_network_error_is_a_bad_gateway(tmp_path: Path) -> None:
-    from pydantic import SecretStr
-
     settings = Settings(
         database=tmp_path / "d.db",
         max_retries=0,
         request_timeout=1,
         env={"BITCOIN_TESTNET4_ESPLORA_SERVER": SecretStr("http://127.0.0.1:9")},
     )
-    reply = TestClient(create_app(settings=settings)).get(
+    reply = TestClient(create_app(settings=settings, live_accounts=True)).get(
         f"/chains/bitcoin/testnet4/accounts/{SMALL}"
     )
     assert reply.status_code == 502
@@ -186,8 +241,6 @@ def test_openapi_lists_every_route(client: TestClient) -> None:
 def test_serve_listens_on_localhost_unless_told_otherwise(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import uvicorn
-
     calls: list[dict[str, Any]] = []
     monkeypatch.setattr(uvicorn, "run", lambda app, **options: calls.append(options))
     options = ["--db", str(tmp_path / "s.db"), "--env-file", str(tmp_path / "no.env")]
@@ -225,3 +278,29 @@ def test_cross_chain_metrics_match_the_library(
     ) as everything:
         rows = everything.metrics(ALL_TIME).model_dump(mode="json")["rows"]
     assert client.get("/metrics", params={"days": ALL_TIME}).json()["rows"] == rows
+
+
+def test_serve_passes_live_accounts_and_reports_a_bad_database_cleanly(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    built: list[dict[str, Any]] = []
+    real_create_app = server.create_app
+
+    def recording_create_app(**options: Any) -> Any:
+        built.append(options)
+        return real_create_app(**options)
+
+    monkeypatch.setattr(server, "create_app", recording_create_app)
+    monkeypatch.setattr(uvicorn, "run", lambda app, **options: None)
+    options = ["--db", str(tmp_path / "s.db"), "--env-file", str(tmp_path / "no.env")]
+    assert CliRunner().invoke(cli, [*options, "serve"]).exit_code == 0
+    assert CliRunner().invoke(cli, [*options, "serve", "--live-accounts"]).exit_code == 0
+    assert [call["live_accounts"] for call in built] == [False, True]
+
+    monkeypatch.setattr(db, "CONNECT_TIMEOUT_SECONDS", 1)
+    url = "postgresql://indexer:not-a-real-password@127.0.0.1:1/indexer"
+    failed = CliRunner().invoke(cli, ["--db", url, "--env-file", str(tmp_path / "no.env"), "serve"])
+    assert failed.exit_code == 1
+    assert "cannot migrate the database" in failed.output
+    assert "not-a-real-password" not in failed.output
+    assert "Traceback" not in failed.output

@@ -11,6 +11,7 @@ from pathlib import Path
 import psycopg
 import pytest
 from click.testing import CliRunner
+from fastapi.testclient import TestClient
 
 from multichain_indexer import Indexer
 from multichain_indexer.cli import cli
@@ -19,6 +20,8 @@ from multichain_indexer.core.errors import ConfigError
 from multichain_indexer.db import SQLALCHEMY_POSTGRES, open_storage
 from multichain_indexer.db.migrate import BASELINE, current_revision
 from multichain_indexer.db.postgres import PostgresStorage
+from multichain_indexer.db.snapshots import stored_account
+from multichain_indexer.server import create_app
 from tests.bitcoin_support import SMALL, serve_small
 from tests.conftest import FakeNode
 from tests.postgres_support import postgres_url
@@ -95,10 +98,15 @@ def test_a_snapshot_keeps_the_latest_state_as_jsonb(node: FakeNode, btc_settings
     url = postgres_url()
     serve_small(node)
     with Indexer("bitcoin", settings=btc_settings, database=url) as indexer:
-        first = indexer.account(SMALL)
         indexer.account(SMALL)
+        latest = indexer.account(SMALL)
     with psycopg.connect(url) as connection:
         rows = connection.execute(
             "SELECT kind, item_id, record->>'balance' FROM snapshots"
         ).fetchall()
-    assert rows == [("AccountRecord", SMALL, str(first.balance))]
+    assert rows == [("AccountRecord", SMALL, str(latest.balance))]
+    assert stored_account(url, "bitcoin", "testnet4", SMALL) == latest.model_dump(mode="json")
+    served = TestClient(create_app(settings=btc_settings, database=url)).get(
+        f"/chains/bitcoin/testnet4/accounts/{SMALL}"
+    )
+    assert served.json() == latest.model_dump(mode="json")

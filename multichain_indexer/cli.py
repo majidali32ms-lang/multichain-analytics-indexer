@@ -485,10 +485,20 @@ def _chain_export(
     show_default=True,
     help="What each client may send.",
 )
+@click.option(
+    "--live-accounts",
+    is_flag=True,
+    help="Let account lookups read the chain and store the new state, as index account does.",
+)
 @click.pass_obj
-def serve(options: _Options, host: str, port: int, requests_per_minute: int) -> None:
+def serve(
+    options: _Options, host: str, port: int, requests_per_minute: int, live_accounts: bool
+) -> None:
     """Serve the database read-only over HTTP, with OpenAPI docs at /docs. Needs the serve
-    extra."""
+    extra.
+
+    By default no request reaches the network or writes to the database; accounts come from
+    what index account stored. --live-accounts lets account lookups read the chain."""
     try:
         import uvicorn
 
@@ -501,11 +511,15 @@ def serve(options: _Options, host: str, port: int, requests_per_minute: int) -> 
         click.echo(
             f"Listening on {host}: anyone who can reach it can read this database.", err=True
         )
-    app = create_app(
-        settings=options.settings,
-        database=options.database,
-        requests_per_minute=requests_per_minute,
-    )
+    try:
+        app = create_app(
+            settings=options.settings,
+            database=options.database,
+            requests_per_minute=requests_per_minute,
+            live_accounts=live_accounts,
+        )
+    except IndexerError as exc:
+        raise click.ClickException(str(exc)) from None
     uvicorn.run(app, host=host, port=port, log_level="warning" if options.quiet else "info")
 
 
