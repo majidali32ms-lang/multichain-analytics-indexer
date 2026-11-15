@@ -1,4 +1,4 @@
-"""The storage contract every backend must keep."""
+"""The storage contract every backend must keep: SQLite, and PostgreSQL in CI."""
 
 from __future__ import annotations
 
@@ -9,7 +9,9 @@ from pathlib import Path
 import pytest
 
 from multichain_indexer.core.models import NativeData, Status, TransactionRecord
-from multichain_indexer.core.storage import Backfill, SQLiteStorage, Storage
+from multichain_indexer.core.storage import Backfill, Storage
+from multichain_indexer.db import open_storage
+from tests.postgres_support import postgres_url
 
 NOW = datetime(2026, 11, 15, 12, tzinfo=UTC)
 # Larger than any 64-bit integer, as a NEAR fee in yoctoNEAR or an EVM amount in wei can be.
@@ -43,9 +45,11 @@ def record(
     )
 
 
-@pytest.fixture
-def storage(tmp_path: Path) -> Iterator[Storage]:
-    opened = SQLiteStorage(tmp_path / "storage.db")
+@pytest.fixture(params=["sqlite", "postgresql"])
+def storage(request: pytest.FixtureRequest, tmp_path: Path) -> Iterator[Storage]:
+    """Every test runs on SQLite, and on PostgreSQL when a test database is configured."""
+    database = postgres_url() if request.param == "postgresql" else tmp_path / "storage.db"
+    opened = open_storage(database)
     yield opened
     opened.close()
 

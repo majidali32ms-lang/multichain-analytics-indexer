@@ -33,7 +33,7 @@ from multichain_indexer.core.models import (
 )
 from multichain_indexer.core.pipeline import Pipeline, ProgressCallback
 from multichain_indexer.core.registry import create_indexer
-from multichain_indexer.core.storage import SQLiteStorage
+from multichain_indexer.db import Database, chosen_database, open_storage
 
 DEFAULT_TRANSACTION_LIMIT = 20
 _T = TypeVar("_T")
@@ -55,7 +55,8 @@ class AsyncIndexer:
         network: Network name; when None, the chain's network in ``config.toml``, else its
             test network.
         settings: Configuration; read from ``.env`` and the environment when None.
-        database: Database file; overrides the configured one.
+        database: SQLite file or PostgreSQL URL; overrides ``MCI_DATABASE_URL`` and the
+            configured file.
 
     Raises:
         UnsupportedChain: The chain is unknown or not available in this version.
@@ -68,13 +69,13 @@ class AsyncIndexer:
         network: str | None = None,
         *,
         settings: Settings | None = None,
-        database: Path | None = None,
+        database: Database | None = None,
     ) -> None:
         config = settings or Settings.from_env()
         self._cache = ResponseCache(config.cache_path) if config.cache_path else None
         chosen = network or config.default_networks.get(chain)
         self._indexer = create_indexer(chain, chosen, config, self._cache)
-        self._storage = SQLiteStorage(database or config.database)
+        self._storage = open_storage(chosen_database(config, database))
         self._pipeline = Pipeline(self._indexer, self._storage)
 
     @property
@@ -228,7 +229,7 @@ class Indexer:
         network: str | None = None,
         *,
         settings: Settings | None = None,
-        database: Path | None = None,
+        database: Database | None = None,
     ) -> None:
         self._thread = _LoopThread()
         try:

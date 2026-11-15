@@ -31,7 +31,7 @@ from multichain_indexer.core.config_file import MAINNET
 from multichain_indexer.core.errors import IndexerError, InvalidInput
 from multichain_indexer.core.export import export_transactions
 from multichain_indexer.core.models import MetricsReport, SyncResult, TransactionRecord
-from multichain_indexer.core.storage import SQLiteStorage
+from multichain_indexer.db import Database, chosen_database, open_storage
 
 ALL_CHAINS = "all"
 
@@ -83,16 +83,19 @@ class AsyncCrossChain:
     Args:
         settings: Configuration; read from ``config.toml``, ``.env`` and the environment
             when None.
-        database: Database file; overrides the configured one.
+        database: SQLite file or PostgreSQL URL; overrides ``MCI_DATABASE_URL`` and the
+            configured file.
     """
 
-    def __init__(self, *, settings: Settings | None = None, database: Path | None = None) -> None:
+    def __init__(
+        self, *, settings: Settings | None = None, database: Database | None = None
+    ) -> None:
         self._settings = settings or Settings.from_env()
-        self._database = database or self._settings.database
+        self._database = chosen_database(self._settings, database)
 
     def networks(self) -> list[tuple[str, str]]:
         """Return every chain and network with stored transactions."""
-        storage = SQLiteStorage(self._database)
+        storage = open_storage(self._database)
         try:
             return storage.stored_networks()
         finally:
@@ -198,7 +201,9 @@ class AsyncCrossChain:
 class CrossChain:
     """Blocking version of ``AsyncCrossChain``, with the same methods and arguments."""
 
-    def __init__(self, *, settings: Settings | None = None, database: Path | None = None) -> None:
+    def __init__(
+        self, *, settings: Settings | None = None, database: Database | None = None
+    ) -> None:
         self._thread = _LoopThread()
         self._inner = AsyncCrossChain(settings=settings, database=database)
 

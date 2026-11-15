@@ -21,6 +21,7 @@ from multichain_indexer.core.models import SyncResult, TransactionRecord
 from multichain_indexer.core.observability import configure_logging
 from multichain_indexer.core.registry import PLANNED_CHAINS, available_chains
 from multichain_indexer.crosschain import ALL_CHAINS, CrossChain, CrossChainReport
+from multichain_indexer.db import Database, chosen_database, database_secrets, is_postgres
 from multichain_indexer.pq import PQ_STATUS
 from multichain_indexer.report import REPORT_FORMATS, metrics_table, write_report
 
@@ -73,7 +74,7 @@ class _Options:
         self,
         chain: str,
         network: str | None,
-        database: Path | None,
+        database: Database,
         settings: Settings,
         quiet: bool,
     ) -> None:
@@ -134,7 +135,7 @@ def _with_indexer(
         "devnet, NEAR testnet, the EVM chain's testnet, such as Sepolia, or Bitcoin testnet4."
     ),
 )
-@click.option("--db", "database", type=click.Path(dir_okay=False, path_type=Path))
+@click.option("--db", "database", help="SQLite file or postgresql:// URL.")
 @click.option("--env-file", default=".env", show_default=True)
 @click.option(
     "--config",
@@ -150,7 +151,7 @@ def cli(
     context: click.Context,
     chain: str,
     network: str | None,
-    database: Path | None,
+    database: str | None,
     env_file: str,
     config_file: str,
     verbose: bool,
@@ -161,8 +162,11 @@ def cli(
         settings = Settings.from_env(env_file, config_file=config_file)
     except IndexerError as exc:
         raise click.ClickException(str(exc)) from None
-    configure_logging(verbose=verbose, quiet=quiet, secrets=settings.secret_values())
-    context.obj = _Options(chain, network, database, settings, quiet)
+    chosen = None if database is None or is_postgres(database) else Path(database)
+    target = chosen_database(settings, database if chosen is None else chosen)
+    secrets = (*settings.secret_values(), *database_secrets(target))
+    configure_logging(verbose=verbose, quiet=quiet, secrets=secrets)
+    context.obj = _Options(chain, network, target, settings, quiet)
 
 
 @cli.group()
