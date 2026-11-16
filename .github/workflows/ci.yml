@@ -30,6 +30,18 @@ jobs:
       - run: uv run ruff check .
       - run: uv run mypy
       - run: uv run pip-audit
+      # requirements.txt is generated from uv.lock and must never drift from it. The first two
+      # lines are skipped because the header names the file the command wrote to, and line
+      # endings are ignored so the same check also runs on Windows.
+      - name: requirements.txt matches uv.lock
+        run: |
+          uv export --no-dev --no-hashes --format requirements-txt --quiet -o "$RUNNER_TEMP/requirements.txt"
+          tail -n +3 requirements.txt | tr -d '\r' > "$RUNNER_TEMP/committed.txt"
+          tail -n +3 "$RUNNER_TEMP/requirements.txt" | tr -d '\r' > "$RUNNER_TEMP/exported.txt"
+          if ! diff -u "$RUNNER_TEMP/committed.txt" "$RUNNER_TEMP/exported.txt"; then
+            echo "::error file=requirements.txt::requirements.txt does not match uv.lock. Run: uv export --no-dev --no-hashes --format requirements-txt -o requirements.txt"
+            exit 1
+          fi
 
   postgres:
     runs-on: ubuntu-latest
