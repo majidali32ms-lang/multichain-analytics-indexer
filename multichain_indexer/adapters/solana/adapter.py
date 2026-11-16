@@ -45,7 +45,7 @@ from multichain_indexer.core.models import (
     TransactionPage,
     TransactionRecord,
 )
-from multichain_indexer.core.ratelimit import RateLimiter
+from multichain_indexer.core.ratelimit import host_scope, shared_limiter
 
 LAMPORT_DECIMALS = 9
 CONFIRMED = "confirmed"
@@ -230,11 +230,12 @@ def create_indexer(
         raise InvalidInput(f"unknown Solana cluster {chosen!r}: {', '.join(PROFILE.networks)}")
 
     commitment = _commitment(settings, chosen)
+    server = settings.endpoint(CHAIN, chosen, "RPC_SERVER", DEFAULT_RPC_SERVERS[chosen])
     client = ApiClient(
-        settings.endpoint(CHAIN, chosen, "RPC_SERVER", DEFAULT_RPC_SERVERS[chosen]),
+        server,
         timeout=settings.request_timeout,
         max_retries=settings.max_retries,
-        limiter=RateLimiter(_requests_per_second(settings)),
+        limiter=shared_limiter(host_scope(server), _requests_per_second(settings)),
         cache=cache,
     )
     return SolanaIndexer(chosen, SolanaRpc(client, commitment), commitment)

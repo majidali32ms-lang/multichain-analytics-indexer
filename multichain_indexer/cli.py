@@ -14,13 +14,17 @@ from typing import Concatenate, ParamSpec, TextIO, TypeVar
 import click
 
 from multichain_indexer.api import Indexer
-from multichain_indexer.core.config import Settings
-from multichain_indexer.core.errors import IndexerError, InvalidInput
+from multichain_indexer.core.config import DEFAULT_CONFIG_FILE, Settings
+from multichain_indexer.core.errors import ConfigError, IndexerError, InvalidInput
 from multichain_indexer.core.export import EXPORT_FORMATS
 from multichain_indexer.core.models import SyncResult, TransactionRecord
 from multichain_indexer.core.observability import configure_logging
-from multichain_indexer.core.registry import PLANNED_CHAINS
+from multichain_indexer.core.registry import PLANNED_CHAINS, available_chains
+from multichain_indexer.crosschain import ALL_CHAINS, CrossChain, CrossChainReport
+from multichain_indexer.db import Database, chosen_database, database_secrets, is_postgres
+from multichain_indexer.follow import FollowSummary, default_interval
 from multichain_indexer.pq import PQ_STATUS
+from multichain_indexer.report import REPORT_FORMATS, metrics_table, write_report
 
 if sys.platform == "win32":
     import ctypes
@@ -38,11 +42,34 @@ EVM_CHAINS = ("ethereum", "arbitrum", "optimism", "base", "polygon", "bnb")
 ATTRIBUTIONS = {"etherscan": "Powered by Etherscan.io APIs"}
 # The exit code Click uses when the reader of a pipe goes away, as in `... | head`.
 EXIT_OUTPUT_CLOSED = 1
+# Some accounts of a cross-chain sync failed; the others were synced and reported.
+EXIT_SOME_FAILED = 1
+SERVE_HOST = "127.0.0.1"
+SERVE_PORT = 8000
+SERVE_REQUESTS_PER_MINUTE = 120
+LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 # A write to a closed pipe fails with EPIPE on Linux and EINVAL on Windows.
 CLOSED_PIPE_ERRNOS = frozenset({errno.EPIPE, errno.EINVAL})
 # What Windows reports for a write to a pipe whose reader has gone: ERROR_NO_DATA ("the pipe
 # is being closed") and ERROR_BROKEN_PIPE.
 WINDOWS_CLOSED_PIPE_ERRORS = frozenset({232, 109})
+
+
+class _ChainName(click.ParamType[str]):
+    """A built-in or plugin chain. Installed plugins are looked up only when it is used."""
+
+    name = "chain"
+
+    def convert(self, value: str, param: click.Parameter | None, ctx: click.Context | None) -> str:
+        try:
+            chains = available_chains()
+        except ConfigError as exc:
+            self.fail(str(exc), param, ctx)
+        if value not in (*chains, ALL_CHAINS):
+            self.fail(
+                f"{value!r} is not a known chain; choose from {', '.join(chains)}", param, ctx
+            )
+        return value
 
 
 class _Options:
@@ -52,7 +79,7 @@ class _Options:
         self,
         chain: str,
         network: str | None,
-        database: Path | None,
+        database: Database,
         settings: Settings,
         quiet: bool,
     ) -> None:
@@ -62,8 +89,20 @@ class _Options:
         self.settings = settings
         self.quiet = quiet
 
+    @property
+    def all_chains(self) -> bool:
+        return self.chain == ALL_CHAINS
+
     def open_indexer(self) -> Indexer:
+        if self.all_chains:
+            raise InvalidInput(
+                "this command works on one chain; --chain all is for metrics, export, sync "
+                "and report"
+            )
         return Indexer(self.chain, self.network, settings=self.settings, database=self.database)
+
+    def open_cross_chain(self) -> CrossChain:
+        return CrossChain(settings=self.settings, database=self.database)
 
 
 def _with_indexer(
@@ -85,21 +124,31 @@ def _with_indexer(
 @click.group()
 @click.option(
     "--chain",
-    type=click.Choice(PLANNED_CHAINS),
+    type=_ChainName(),
     default="algorand",
     show_default=True,
-    help="Chain to work on. Chains not yet supported say so when used.",
+    help=(
+        f"Chain to work on: {', '.join(PLANNED_CHAINS)}, a chain an installed plugin adds, "
+        "or all (metrics, export, sync and report)."
+    ),
 )
 @click.option(
     "--network",
-    type=click.Choice(["mainnet", "testnet", "devnet", "localnet"]),
     help=(
-        "Network to read. Defaults to Algorand testnet, Solana devnet, NEAR testnet, or the "
-        "EVM chain's testnet, such as Sepolia."
+        "Network to read, such as mainnet, testnet, devnet, testnet4, signet or localnet. "
+        "Defaults to the chain's network in config.toml, else Algorand testnet, Solana "
+        "devnet, NEAR testnet, the EVM chain's testnet, such as Sepolia, or Bitcoin testnet4."
     ),
 )
-@click.option("--db", "database", type=click.Path(dir_okay=False, path_type=Path))
+@click.option("--db", "database", help="SQLite file or postgresql:// URL.")
 @click.option("--env-file", default=".env", show_default=True)
+@click.option(
+    "--config",
+    "config_file",
+    default=DEFAULT_CONFIG_FILE,
+    show_default=True,
+    help="Endpoints, networks, accounts and prices; never secrets.",
+)
 @click.option("-v", "--verbose", is_flag=True, help="Log progress as well as problems.")
 @click.option("-q", "--quiet", is_flag=True, help="Log errors only and hide sync progress.")
 @click.pass_context
@@ -107,23 +156,28 @@ def cli(
     context: click.Context,
     chain: str,
     network: str | None,
-    database: Path | None,
+    database: str | None,
     env_file: str,
+    config_file: str,
     verbose: bool,
     quiet: bool,
 ) -> None:
     """Index and analyse blockchain accounts and transactions."""
     try:
-        settings = Settings.from_env(env_file)
+        settings = Settings.from_env(env_file, config_file=config_file)
     except IndexerError as exc:
         raise click.ClickException(str(exc)) from None
-    configure_logging(verbose=verbose, quiet=quiet, secrets=settings.secret_values())
-    context.obj = _Options(chain, network, database, settings, quiet)
+    chosen = None if database is None or is_postgres(database) else Path(database)
+    target = chosen_database(settings, database if chosen is None else chosen)
+    secrets = (*settings.secret_values(), *database_secrets(target))
+    configure_logging(verbose=verbose, quiet=quiet, secrets=secrets)
+    context.obj = _Options(chain, network, target, settings, quiet)
 
 
 @cli.group()
 def index() -> None:
-    """Look up one account, Algorand ASA or app, Solana SPL token or program, or contract."""
+    """Look up one account, Algorand ASA or app, Solana SPL token or program, or contract,
+    or one Bitcoin address or transaction."""
 
 
 @index.command("account")
@@ -146,6 +200,46 @@ def index_account(indexer: Indexer, address: str, limit: int) -> None:
         click.echo(_transaction_line(indexer, record))
     for line in _attributions(records):
         click.echo(line)
+
+
+@index.command("address")
+@click.argument("address")
+@click.option(
+    "--limit",
+    type=click.IntRange(min=1),
+    default=DEFAULT_RECENT_TRANSACTIONS,
+    show_default=True,
+    help="Recent transactions to show.",
+)
+@click.pass_obj
+@_with_indexer
+def index_address(indexer: Indexer, address: str, limit: int) -> None:
+    """Show a Bitcoin address or P2PK public key: balance in BTC, UTXOs and recent txids."""
+    _require_chain(indexer, "bitcoin", "index address")
+    _echo_fields(indexer.describe(indexer.account(address)))
+    click.echo()
+    for record in indexer.account_transactions(address, limit=limit):
+        click.echo(_transaction_line(indexer, record))
+
+
+@index.command("tx")
+@click.argument("txid")
+@click.pass_obj
+@_with_indexer
+def index_tx(indexer: Indexer, txid: str) -> None:
+    """Show one Bitcoin transaction by its txid: fee in sats, fee rate in sat/vB, inputs and
+    outputs."""
+    _require_chain(indexer, "bitcoin", "index tx")
+    record = indexer.transaction(txid)
+    _echo_fields(
+        {
+            "Txid": record.id,
+            "Time": record.time.strftime("%Y-%m-%d %H:%M UTC"),
+            "Sender": record.sender,
+            "Receiver": record.receiver or "none",
+            **indexer.describe(record),
+        }
+    )
 
 
 @index.command("asset")
@@ -199,11 +293,69 @@ def index_contract(indexer: Indexer, contract_id: str) -> None:
 
 
 @cli.command()
-@click.argument("address")
+@click.argument("address", required=False)
+@click.option("--follow", is_flag=True, help="Keep syncing as new transactions arrive.")
+@click.option(
+    "--interval",
+    type=click.FloatRange(min=1),
+    help="Seconds between rounds with --follow; each chain has its own default.",
+)
 @click.pass_obj
-def sync(options: _Options, address: str) -> None:
-    """Store an account's new transactions; only what arrived since the last sync."""
+def sync(options: _Options, address: str | None, follow: bool, interval: float | None) -> None:
+    """Store an account's new transactions; only what arrived since the last sync.
+
+    With --chain all, sync every account listed under [accounts] in config.toml, chains in
+    parallel; mainnet accounts only with --network mainnet."""
+    if options.all_chains:
+        if follow:
+            raise click.UsageError("--follow works on one account of one chain")
+        if address is not None:
+            raise click.UsageError("--chain all syncs the accounts in config.toml; give no address")
+        _sync_all(options)
+        return
+    if address is None:
+        raise click.UsageError("give the account to sync")
+    if follow:
+        _follow(options, address, interval)
+        return
     _sync(options, address, show_progress=not options.quiet)
+
+
+@_with_indexer
+def _follow(indexer: Indexer, address: str, interval: float | None) -> None:
+    pause = interval or default_interval(indexer.profile.name)
+    tally = FollowSummary()
+
+    def report(result: SyncResult) -> None:
+        tally.add(result)
+        if result.records_fetched:
+            click.echo(_sync_summary(result))
+
+    click.echo(f"Following {address} every {pause:g}s; press Ctrl-C to stop.", err=True)
+    try:
+        indexer.follow(address, interval=pause, on_sync=report)
+    except KeyboardInterrupt:
+        click.echo(
+            f"Stopped after {tally.rounds} rounds: {tally.records_fetched} transactions, "
+            f"{tally.requests_made} requests.",
+            err=True,
+        )
+
+
+def _sync_all(options: _Options) -> None:
+    with options.open_cross_chain() as everything:
+        try:
+            outcomes = everything.sync(options.network)
+        except IndexerError as exc:
+            raise click.ClickException(str(exc)) from None
+    for outcome in outcomes:
+        if outcome.result is not None:
+            click.echo(_sync_summary(outcome.result))
+            continue
+        where = f"{outcome.account} on {outcome.chain} {outcome.network}"
+        click.echo(f"Failed {where}: {outcome.error}", err=True)
+    if any(outcome.error is not None for outcome in outcomes):
+        sys.exit(EXIT_SOME_FAILED)
 
 
 @_with_indexer
@@ -220,12 +372,58 @@ def _sync(indexer: Indexer, address: str, *, show_progress: bool) -> None:
 @cli.command()
 @click.option("--days", type=click.IntRange(min=1), default=30, show_default=True)
 @click.option("--account", help="Limit to one synced account.")
+@click.option("--json", "as_json", is_flag=True, help="With --chain all, print JSON.")
 @click.pass_obj
+def metrics(options: _Options, days: int, account: str | None, as_json: bool) -> None:
+    """Print metrics over stored transactions as JSON; fees are in the chain's base unit.
+
+    With --chain all, print every stored chain and network side by side."""
+    if not options.all_chains:
+        _chain_metrics(options, days, account)
+        return
+    if account is not None:
+        raise click.UsageError("--account works on one chain, not with --chain all")
+    report = _cross_chain_report(options, days)
+    if as_json:
+        click.echo(json.dumps(report.model_dump(mode="json"), indent=2))
+        return
+    for line in metrics_table(report):
+        click.echo(line)
+
+
 @_with_indexer
-def metrics(indexer: Indexer, days: int, account: str | None) -> None:
-    """Print metrics over stored transactions as JSON; fees are in the chain's base unit."""
+def _chain_metrics(indexer: Indexer, days: int, account: str | None) -> None:
     report = indexer.metrics(days, account=account)
     click.echo(json.dumps(report.model_dump(mode="json"), indent=2))
+
+
+@cli.command()
+@click.option(
+    "--format",
+    "report_format",
+    type=click.Choice(REPORT_FORMATS),
+    default="html",
+    show_default=True,
+)
+@click.option(
+    "--output",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="File to write; standard output without it.",
+)
+@click.option("--days", type=click.IntRange(min=1), default=30, show_default=True)
+@click.pass_obj
+def report(options: _Options, report_format: str, output: Path | None, days: int) -> None:
+    """Compare every stored chain: activity, fees and active accounts, as an offline HTML
+    page, CSV or JSON."""
+    text = write_report(_cross_chain_report(options, days), report_format, output)
+    if text is not None:
+        click.echo(text.rstrip("\n"))
+
+
+def _cross_chain_report(options: _Options, days: int) -> CrossChainReport:
+    # A chain that fails reports its error in its own row, so nothing here raises.
+    with options.open_cross_chain() as everything:
+        return everything.metrics(days)
 
 
 @cli.command()
@@ -238,18 +436,91 @@ def metrics(indexer: Indexer, days: int, account: str | None) -> None:
 @click.option("--account", help="Limit to one synced account.")
 @click.option("--days", type=click.IntRange(min=1), help="Limit to the last N days.")
 @click.pass_obj
-@_with_indexer
 def export(
-    indexer: Indexer,
+    options: _Options,
     export_format: str,
     output: Path | None,
     account: str | None,
     days: int | None,
 ) -> None:
-    """Export stored transactions."""
-    text = indexer.export(export_format, output, account=account, days=days)
+    """Export stored transactions. With --chain all, every chain in one table."""
+    if options.all_chains:
+        if account is not None:
+            raise click.UsageError("--account works on one chain, not with --chain all")
+        text = _cross_chain_export(options, export_format, output, days)
+    else:
+        text = _chain_export(options, export_format, output, account, days)
     if text is not None:
         click.echo(text.rstrip("\n"))
+
+
+def _cross_chain_export(
+    options: _Options, export_format: str, output: Path | None, days: int | None
+) -> str | None:
+    with options.open_cross_chain() as everything:
+        try:
+            return everything.export(export_format, output, days=days)
+        except IndexerError as exc:
+            raise click.ClickException(str(exc)) from None
+
+
+@_with_indexer
+def _chain_export(
+    indexer: Indexer,
+    export_format: str,
+    output: Path | None,
+    account: str | None,
+    days: int | None,
+) -> str | None:
+    return indexer.export(export_format, output, account=account, days=days)
+
+
+@cli.command()
+@click.option("--host", default=SERVE_HOST, show_default=True, help="Address to listen on.")
+@click.option("--port", type=click.IntRange(1, 65535), default=SERVE_PORT, show_default=True)
+@click.option(
+    "--requests-per-minute",
+    type=click.IntRange(min=1),
+    default=SERVE_REQUESTS_PER_MINUTE,
+    show_default=True,
+    help="What each client may send.",
+)
+@click.option(
+    "--live-accounts",
+    is_flag=True,
+    help="Let account lookups read the chain and store the new state, as index account does.",
+)
+@click.pass_obj
+def serve(
+    options: _Options, host: str, port: int, requests_per_minute: int, live_accounts: bool
+) -> None:
+    """Serve the database read-only over HTTP, with OpenAPI docs at /docs. Needs the serve
+    extra.
+
+    By default no request reaches the network or writes to the database; accounts come from
+    what index account stored. --live-accounts lets account lookups read the chain."""
+    try:
+        import uvicorn
+
+        from multichain_indexer.server import create_app
+    except ImportError:
+        raise click.ClickException(
+            "serve needs the serve extra: pip install 'multichain-analytics-indexer[serve]'"
+        ) from None
+    if host not in LOOPBACK_HOSTS:
+        click.echo(
+            f"Listening on {host}: anyone who can reach it can read this database.", err=True
+        )
+    try:
+        app = create_app(
+            settings=options.settings,
+            database=options.database,
+            requests_per_minute=requests_per_minute,
+            live_accounts=live_accounts,
+        )
+    except IndexerError as exc:
+        raise click.ClickException(str(exc)) from None
+    uvicorn.run(app, host=host, port=port, log_level="warning" if options.quiet else "info")
 
 
 @cli.command("pq-status")

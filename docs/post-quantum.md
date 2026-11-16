@@ -20,7 +20,7 @@ checked.
 | base | mainnet | none live yet |  |  | No official post-quantum statement found. Optimism's Superchain roadmap does not name Base, which has run its own stack since its Azul upgrade (2026); its P256VERIFY precompile is not post-quantum. | [source](https://base.org/blog/introducing-base-azul) | 2026-11-09 |
 | polygon | mainnet | none live yet |  |  | No official post-quantum statement found in the Polygon PoS docs, blog or improvement proposals. | [source](https://docs.polygon.technology/pos/overview/) | 2026-11-09 |
 | bnb | mainnet | none live yet |  |  | Research only: a migration report (2026-05-14) benchmarked ML-DSA-44 transaction signatures; its proof of concept was not merged, and no BEP enables them. | [source](https://www.bnbchain.org/en/blog/bsc-post-quantum-cryptography-migration-report) | 2026-11-09 |
-| bitcoin | mainnet | none live yet |  |  | BIP-360 (P2MR) and BIP-361 are drafts; nothing is activated. | [source](https://github.com/bitcoin/bips/blob/master/bip-0360.mediawiki) | 2026-11-08 |
+| bitcoin | mainnet | none live yet |  |  | BIP-360 (P2MR, a witness v2 output with no key path) and BIP-361 (migration and legacy signature sunset) are drafts with no activation parameters; no post-quantum signature BIP exists, and Bitcoin Core 32.1 adds none. | [source](https://github.com/bitcoin/bips/blob/master/bip-0360.mediawiki) | 2026-11-13 |
 
 `multichain-indexer pq-status` prints the same table. It comes from one file,
 `multichain_indexer/pq/status.py`, where every row records when it was last checked.
@@ -50,10 +50,11 @@ does; its `pq.evidence` says how many.
 deployed on any public cluster. There is no detector until a deployed official program
 exists.
 
-**EVM chains and Bitcoin.** Nothing is live. Phase 4 (EVM) and Phase 5 (Bitcoin) use the same
-framework. Bitcoin will also report "quantum-exposed outputs": unspent outputs whose public
-key is already on chain, which BIP-341 and BIP-360 describe. P2PK and P2TR outputs carry the
-key in the output; P2PKH, P2WPKH, P2SH and P2WSH reveal it once spent.
+**EVM chains and Bitcoin.** Nothing is live. Bitcoin also reports, per address, whether its
+confirmed unspent outputs are quantum-exposed: P2PK and P2TR by script type; P2PKH and P2WPKH
+once the address has spent in a confirmed block; P2SH and P2WSH show "script revealed" once
+spent. The [Bitcoin page](chains/bitcoin.md#quantum-exposed-outputs) has the rule and its
+limits.
 
 ## Where it shows
 

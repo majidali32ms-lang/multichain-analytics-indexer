@@ -174,15 +174,28 @@ def test_base_sepolia_history_from_alchemy() -> None:
     assert all(record.native.l1_data is not None for record in records)
 
 
+# The newest blocks are not used: 1 of 10 windows of 30 blocks held no direct WETH
+# transaction on 2026-11-13. These blocks hold two, read through Alchemy that day.
+BASE_WETH_BLOCKS = (38_000_000, 38_000_005)
+BASE_WETH_TRANSACTIONS = (
+    "0x55d6456c17caeb1c0baa5f48d50d4dbd174932d62ee5476bf194376ff9741726",
+    "0x95400e5e434fdb7732c2ec8f0f311a7291206f48c2526280361431e760763849",
+)
+
+
 async def test_base_mainnet_history_from_alchemy() -> None:
     require_key("ALCHEMY_API_KEY")
     adapter = create_indexer("base", "mainnet", Settings.from_env())
+    low, high = BASE_WETH_BLOCKS
     try:
-        head = await adapter.chain_head()
-        page = await anext(
-            adapter.iter_account_transactions(OP_STACK_WETH, from_height=head - 30, to_height=head)
-        )
+        records = [
+            record
+            async for page in adapter.iter_account_transactions(
+                OP_STACK_WETH, from_height=low, to_height=high
+            )
+            for record in page.records
+        ]
     finally:
         await adapter.aclose()
-    assert page.records
-    assert {record.native.history_source for record in page.records} == {"alchemy"}
+    assert tuple(record.id for record in records) == BASE_WETH_TRANSACTIONS
+    assert {record.native.history_source for record in records} == {"alchemy"}

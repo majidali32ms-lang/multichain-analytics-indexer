@@ -113,6 +113,10 @@ ON CONFLICT (chain, network, account) DO UPDATE SET
     backfill_cursor = NULL
 """
 
+_STORED_NETWORKS = """
+SELECT DISTINCT chain, network FROM transactions ORDER BY chain, network
+"""
+
 _LOAD_SYNC_STATE = """
 SELECT checkpoint, backfill_from, backfill_to, backfill_cursor
 FROM sync_state
@@ -168,6 +172,10 @@ class Storage(ABC):
         status: Status | None = None,
     ) -> list[TransactionRecord]:
         """Return stored transactions, newest first, optionally only those with ``status``."""
+
+    @abstractmethod
+    def stored_networks(self) -> list[tuple[str, str]]:
+        """Return every chain and network that has stored transactions, in name order."""
 
     @abstractmethod
     def save_snapshot(self, record: AccountRecord | AssetRecord | ContractRecord) -> None:
@@ -250,6 +258,10 @@ class SQLiteStorage(Storage):
         query += " ORDER BY t.time DESC, t.tx_id"
         rows = self._connection.execute(query, arguments).fetchall()
         return [_transaction_from_row(row, native_model) for row in rows]
+
+    def stored_networks(self) -> list[tuple[str, str]]:
+        rows = self._connection.execute(_STORED_NETWORKS).fetchall()
+        return [(chain, network) for chain, network in rows]
 
     def save_snapshot(self, record: AccountRecord | AssetRecord | ContractRecord) -> None:
         item_id = record.address if isinstance(record, AccountRecord) else record.id

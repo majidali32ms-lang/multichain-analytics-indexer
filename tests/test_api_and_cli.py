@@ -11,6 +11,7 @@ from click.testing import CliRunner, Result
 
 from multichain_indexer import AsyncIndexer, Indexer, InvalidInput, UnsupportedChain
 from multichain_indexer.cli import cli
+from multichain_indexer.core import registry
 from multichain_indexer.core.config import Settings
 from tests.conftest import FakeNode, Reply, load_fixture
 
@@ -123,7 +124,8 @@ def test_metrics_cover_the_window_and_validate_days(node: FakeNode, settings: Se
             indexer.stored_transactions(days=0)
 
 
-def test_unsupported_chain_is_refused(settings: Settings) -> None:
+def test_unsupported_chain_is_refused(settings: Settings, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delitem(registry._factories, "bitcoin")
     with pytest.raises(UnsupportedChain, match="later version"):
         Indexer("bitcoin", settings=settings)
 
@@ -229,7 +231,7 @@ def test_cli_export_to_stdout_and_file(node: FakeNode, invoke: Invoke, tmp_path:
         (("index", "asset", "abc"), "ASA ID"),
         (("index", "app", "0"), "app ID"),
         (("sync", "BAD"), "not a valid Algorand address"),
-        (("--chain", "bitcoin", "metrics"), "later version"),
+        (("--chain", "bitcoin", "index", "tx", "abc"), "not a txid"),
         (("export", "--format", "parquet"), "--output"),
     ],
 )

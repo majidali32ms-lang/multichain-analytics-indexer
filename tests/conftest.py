@@ -6,7 +6,7 @@ from __future__ import annotations
 import asyncio
 import json
 import threading
-from collections.abc import Callable, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -15,6 +15,8 @@ import pytest
 from aiohttp import web
 from pydantic import SecretStr
 
+from multichain_indexer.adapters.bitcoin import BitcoinIndexer, create_indexer
+from multichain_indexer.core import ratelimit
 from multichain_indexer.core.config import Settings
 
 FIXTURES = Path(__file__).parent / "fixtures" / "algorand"
@@ -136,6 +138,20 @@ class FakeNode:
         return route.pop(0) if isinstance(route, list) else route
 
 
+@pytest.fixture(autouse=True)
+def fresh_shared_limiters(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Start every test with no shared limiters, so one test's pace never slows another."""
+    monkeypatch.setattr(ratelimit, "_shared", {})
+
+
+@pytest.fixture
+def working_database(tmp_path: Path) -> Path:
+    """A database holding Algorand testnet and Bitcoin mainnet records."""
+    from tests.crosschain_support import write_two_chains
+
+    return write_two_chains(tmp_path / "two-chains.db")
+
+
 @pytest.fixture
 def node() -> Iterator[FakeNode]:
     fake = FakeNode()
@@ -153,3 +169,21 @@ def settings(node: FakeNode, tmp_path: Path) -> Settings:
         max_retries=1,
         env={"ALGORAND_TESTNET_INDEXER_SERVER": SecretStr(node.url)},
     )
+
+
+@pytest.fixture
+def btc_settings(node: FakeNode, tmp_path: Path) -> Settings:
+    return Settings(
+        database=tmp_path / "indexer.db",
+        requests_per_second=1000,
+        request_timeout=5,
+        max_retries=0,
+        env={"BITCOIN_TESTNET4_ESPLORA_SERVER": SecretStr(node.url)},
+    )
+
+
+@pytest.fixture
+async def adapter(btc_settings: Settings) -> AsyncIterator[BitcoinIndexer]:
+    built = create_indexer(None, btc_settings)
+    yield built
+    await built.aclose()

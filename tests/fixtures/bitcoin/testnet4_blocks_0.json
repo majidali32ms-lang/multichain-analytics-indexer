@@ -1,0 +1,17 @@
+[
+ {
+  "id": "00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043",
+  "height": 0,
+  "version": 1,
+  "timestamp": 1714777860,
+  "tx_count": 1,
+  "size": 261,
+  "weight": 1044,
+  "merkle_root": "7aa0a7ae1e223414cb807e40cd57e667b718e42aaf9306db9102fe28912b7b4e",
+  "previousblockhash": null,
+  "mediantime": 1714777860,
+  "nonce": 393743547,
+  "bits": 486604799,
+  "difficulty": 1.0
+ }
+]

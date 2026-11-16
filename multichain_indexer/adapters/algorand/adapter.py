@@ -35,7 +35,7 @@ from multichain_indexer.core.models import (
     TransactionPage,
     TransactionRecord,
 )
-from multichain_indexer.core.ratelimit import RateLimiter
+from multichain_indexer.core.ratelimit import host_scope, shared_limiter
 
 MICROALGO_DECIMALS = 6
 MAX_UINT64 = 2**64 - 1
@@ -140,7 +140,7 @@ def create_indexer(
         headers=_auth_headers(settings, chosen),
         timeout=settings.request_timeout,
         max_retries=settings.max_retries,
-        limiter=RateLimiter(settings.requests_per_second),
+        limiter=shared_limiter(host_scope(server), settings.requests_per_second),
         cache=cache,
     )
     return AlgorandIndexer(chosen, IndexerApi(client))

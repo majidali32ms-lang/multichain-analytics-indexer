@@ -25,6 +25,7 @@ from multichain_indexer.adapters.solana import SolanaIndexer, create_indexer
 from multichain_indexer.adapters.solana import adapter as adapter_module
 from multichain_indexer.adapters.solana.client import MAX_TRANSACTION_VERSION
 from multichain_indexer.cli import cli
+from multichain_indexer.core import ratelimit
 from multichain_indexer.core.config import Settings
 from tests.conftest import FakeNode, Reply
 from tests.conftest import load_solana_fixture as fixture
@@ -103,6 +104,7 @@ def test_default_rate_is_conservative_and_configurable() -> None:
     default = create_indexer(None, Settings())._rpc._client._limiter
     assert default._interval == pytest.approx(measured_safe_seconds_between_requests)
 
+    ratelimit._shared.clear()
     configured = Settings.from_env(None, environ={"MCI_REQUESTS_PER_SECOND": "50"})
     assert create_indexer(None, configured)._rpc._client._limiter._interval == pytest.approx(0.02)
 

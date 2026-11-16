@@ -11,6 +11,7 @@ import pandas as pd
 import pytest
 from pydantic import SecretStr, ValidationError
 
+from multichain_indexer.core import registry
 from multichain_indexer.core.base_indexer import ChainProfile
 from multichain_indexer.core.config import Settings
 from multichain_indexer.core.errors import ConfigError, InvalidInput, UnsupportedChain
@@ -321,8 +322,9 @@ def test_format_native_trims_trailing_zeros() -> None:
     assert profile.format_native(0) == "0 TOY"
 
 
-def test_registry_reports_planned_and_unknown_chains() -> None:
-    with pytest.raises(UnsupportedChain, match="later version"):
+def test_registry_reports_planned_and_unknown_chains(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delitem(registry._factories, "bitcoin")
+    with pytest.raises(UnsupportedChain, match="bitcoin is available in a later version"):
         create_indexer("bitcoin", None, Settings())
     with pytest.raises(UnsupportedChain, match="unknown chain"):
         create_indexer("dogechain", None, Settings())

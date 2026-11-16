@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "examplechain-indexer"
+version = "0.1.0"
+description = "Template: a third-party chain for multichain-analytics-indexer."
+requires-python = ">=3.11"
+license = "Apache-2.0"
+dependencies = ["multichain-analytics-indexer>=0.7,<0.8"]
+
+# The entry point's name is the chain name; its value is the factory that builds the adapter.
+[project.entry-points."multichain_indexer.adapters"]
+examplechain = "examplechain_indexer:create_indexer"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/examplechain_indexer"]
