@@ -6,7 +6,7 @@ from __future__ import annotations
 import asyncio
 import json
 import threading
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -15,6 +15,8 @@ import pytest
 from aiohttp import web
 from pydantic import SecretStr
 
+from multichain_indexer.adapters.bitcoin import BitcoinIndexer, create_indexer
+from multichain_indexer.core import ratelimit
 from multichain_indexer.core.config import Settings
 
 FIXTURES = Path(__file__).parent / "fixtures" / "algorand"
@@ -44,10 +46,15 @@ class Reply:
 
 
 class FakeNode:
-    """Serves scripted replies. A list is consumed one reply per request."""
+    """Serves scripted replies. A list is consumed one reply per request.
+
+    A handler answers from the request instead: it gets a GET request's query, or a JSON-RPC
+    call's params, and wins over a route with the same key.
+    """
 
     def __init__(self) -> None:
         self.routes: dict[str, Reply | list[Reply]] = {}
+        self.handlers: dict[str, Callable[[Any], Reply]] = {}
         self.requests: list[tuple[str, dict[str, str]]] = []
         self.rpc_calls: list[tuple[str, list[object]]] = []
         self.post_bodies: list[tuple[str, dict[str, Any]]] = []
@@ -92,7 +99,9 @@ class FakeNode:
     async def _handle(self, request: web.Request) -> web.Response:
         self.requests.append((request.path, dict(request.query)))
         self.received_headers.append(dict(request.headers))
-        reply = self._next_reply(await self._route_key(request))
+        key = await self._route_key(request)
+        handler = self.handlers.get(key)
+        reply = handler(await self._request_input(request)) if handler else self._next_reply(key)
         if reply.delay:
             await asyncio.sleep(reply.delay)
         text = reply.raw if reply.raw is not None else json.dumps(reply.body)
@@ -117,11 +126,30 @@ class FakeNode:
     def posted_to(self, path: str) -> list[dict[str, Any]]:
         return [body for requested, body in self.post_bodies if requested == path]
 
+    async def _request_input(self, request: web.Request) -> Any:
+        if request.method != "POST":
+            return dict(request.query)
+        return json.loads(await request.text()).get("params")
+
     def _next_reply(self, key: str) -> Reply:
         route = self.routes.get(key)
         if route is None:
             return Reply({"message": f"no route for {key}"}, status=404)
         return route.pop(0) if isinstance(route, list) else route
+
+
+@pytest.fixture(autouse=True)
+def fresh_shared_limiters(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Start every test with no shared limiters, so one test's pace never slows another."""
+    monkeypatch.setattr(ratelimit, "_shared", {})
+
+
+@pytest.fixture
+def working_database(tmp_path: Path) -> Path:
+    """A database holding Algorand testnet and Bitcoin mainnet records."""
+    from tests.crosschain_support import write_two_chains
+
+    return write_two_chains(tmp_path / "two-chains.db")
 
 
 @pytest.fixture
@@ -141,3 +169,21 @@ def settings(node: FakeNode, tmp_path: Path) -> Settings:
         max_retries=1,
         env={"ALGORAND_TESTNET_INDEXER_SERVER": SecretStr(node.url)},
     )
+
+
+@pytest.fixture
+def btc_settings(node: FakeNode, tmp_path: Path) -> Settings:
+    return Settings(
+        database=tmp_path / "indexer.db",
+        requests_per_second=1000,
+        request_timeout=5,
+        max_retries=0,
+        env={"BITCOIN_TESTNET4_ESPLORA_SERVER": SecretStr(node.url)},
+    )
+
+
+@pytest.fixture
+async def adapter(btc_settings: Settings) -> AsyncIterator[BitcoinIndexer]:
+    built = create_indexer(None, btc_settings)
+    yield built
+    await built.aclose()

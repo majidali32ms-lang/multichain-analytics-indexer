@@ -30,6 +30,8 @@ class ChainPqStatus:
 
 
 CHECKED_ON = "2026-11-08"
+EVM_CHECKED_ON = "2026-11-09"
+BITCOIN_CHECKED_ON = "2026-11-13"
 
 PQ_STATUS: tuple[ChainPqStatus, ...] = (
     ChainPqStatus(
@@ -102,9 +104,12 @@ PQ_STATUS: tuple[ChainPqStatus, ...] = (
         scheme=None,
         since="",
         detected=False,
-        note="EIP-8141 (frame transactions) is a draft; the Hegota upgrade is in planning.",
+        note=(
+            "EIP-8141 (frame transactions) is a draft, scheduled for the Hegota upgrade, "
+            "which has no activation date."
+        ),
         source="https://ethereum.org/roadmap/security/quantum-resistance/",
-        checked_on=CHECKED_ON,
+        checked_on=EVM_CHECKED_ON,
     ),
     ChainPqStatus(
         chain="arbitrum",
@@ -113,9 +118,9 @@ PQ_STATUS: tuple[ChainPqStatus, ...] = (
         scheme=None,
         since="",
         detected=False,
-        note="No official post-quantum statement found in the Arbitrum docs.",
+        note="No official post-quantum statement found in the Arbitrum docs or blog.",
         source="https://docs.arbitrum.io/",
-        checked_on=CHECKED_ON,
+        checked_on=EVM_CHECKED_ON,
     ),
     ChainPqStatus(
         chain="optimism",
@@ -124,9 +129,13 @@ PQ_STATUS: tuple[ChainPqStatus, ...] = (
         scheme=None,
         since="",
         detected=False,
-        note="No official post-quantum statement found in the Optimism docs or specs.",
-        source="https://docs.optimism.io/",
-        checked_on=CHECKED_ON,
+        note=(
+            "A roadmap exists, nothing is live: the Post-Quantum Roadmap for the Superchain "
+            "(2026-01-14) plans to retire ECDSA accounts by January 2036, subject to "
+            "governance, and has not chosen a scheme."
+        ),
+        source="https://optimism.io/blog/a-post-quantum-roadmap-for-the-superchain",
+        checked_on=EVM_CHECKED_ON,
     ),
     ChainPqStatus(
         chain="base",
@@ -136,11 +145,12 @@ PQ_STATUS: tuple[ChainPqStatus, ...] = (
         since="",
         detected=False,
         note=(
-            "No official post-quantum statement found; its P256VERIFY precompile is not "
-            "post-quantum."
+            "No official post-quantum statement found. Optimism's Superchain roadmap does not "
+            "name Base, which has run its own stack since its Azul upgrade (2026); its "
+            "P256VERIFY precompile is not post-quantum."
         ),
-        source="https://docs.base.org/",
-        checked_on=CHECKED_ON,
+        source="https://base.org/blog/introducing-base-azul",
+        checked_on=EVM_CHECKED_ON,
     ),
     ChainPqStatus(
         chain="polygon",
@@ -149,9 +159,12 @@ PQ_STATUS: tuple[ChainPqStatus, ...] = (
         scheme=None,
         since="",
         detected=False,
-        note="No official post-quantum statement found in the Polygon PoS docs.",
+        note=(
+            "No official post-quantum statement found in the Polygon PoS docs, blog or "
+            "improvement proposals."
+        ),
         source="https://docs.polygon.technology/pos/overview/",
-        checked_on=CHECKED_ON,
+        checked_on=EVM_CHECKED_ON,
     ),
     ChainPqStatus(
         chain="bnb",
@@ -161,11 +174,11 @@ PQ_STATUS: tuple[ChainPqStatus, ...] = (
         since="",
         detected=False,
         note=(
-            "No official post-quantum statement found; the BNB Smart Chain docs pages read "
-            "were dated 2024."
+            "Research only: a migration report (2026-05-14) benchmarked ML-DSA-44 transaction "
+            "signatures; its proof of concept was not merged, and no BEP enables them."
         ),
-        source="https://docs.bnbchain.org/bnb-smart-chain/",
-        checked_on=CHECKED_ON,
+        source="https://www.bnbchain.org/en/blog/bsc-post-quantum-cryptography-migration-report",
+        checked_on=EVM_CHECKED_ON,
     ),
     ChainPqStatus(
         chain="bitcoin",
@@ -174,8 +187,12 @@ PQ_STATUS: tuple[ChainPqStatus, ...] = (
         scheme=None,
         since="",
         detected=False,
-        note="BIP-360 (P2MR) and BIP-361 are drafts; nothing is activated.",
+        note=(
+            "BIP-360 (P2MR, a witness v2 output with no key path) and BIP-361 (migration "
+            "and legacy signature sunset) are drafts with no activation parameters; no "
+            "post-quantum signature BIP exists, and Bitcoin Core 32.1 adds none."
+        ),
         source="https://github.com/bitcoin/bips/blob/master/bip-0360.mediawiki",
-        checked_on=CHECKED_ON,
+        checked_on=BITCOIN_CHECKED_ON,
     ),
 )

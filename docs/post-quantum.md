@@ -14,13 +14,13 @@ checked.
 | solana | mainnet | none live yet |  |  | The Winternitz vault program in Blueshift's repository (wntrRTssxbf1rz9RPJ4xNBbpXxfsidQJT177NN3MXhB) is not deployed on mainnet, devnet or testnet. | [source](https://github.com/blueshift-gg/solana-winternitz-vault) | 2026-11-08 |
 | near | mainnet | enabled, no use seen | ml-dsa-65 | enabled after 2026-07-20 | ML-DSA-65 keys and signatures (nearcore 2.13.0). No use seen as of 2026-11-08. | [source](https://github.com/near/nearcore/releases/tag/2.13.0) | 2026-11-08 |
 | near | testnet | live | ml-dsa-65 | 2026-07-01 (protocol 85) | ML-DSA-65 keys and signatures; NEP-645 is still a draft. | [source](https://github.com/near/NEPs/blob/master/neps/nep-0645.md) | 2026-11-08 |
-| ethereum | mainnet | none live yet |  |  | EIP-8141 (frame transactions) is a draft; the Hegota upgrade is in planning. | [source](https://ethereum.org/roadmap/security/quantum-resistance/) | 2026-11-08 |
-| arbitrum | mainnet | none live yet |  |  | No official post-quantum statement found in the Arbitrum docs. | [source](https://docs.arbitrum.io/) | 2026-11-08 |
-| optimism | mainnet | none live yet |  |  | No official post-quantum statement found in the Optimism docs or specs. | [source](https://docs.optimism.io/) | 2026-11-08 |
-| base | mainnet | none live yet |  |  | No official post-quantum statement found; its P256VERIFY precompile is not post-quantum. | [source](https://docs.base.org/) | 2026-11-08 |
-| polygon | mainnet | none live yet |  |  | No official post-quantum statement found in the Polygon PoS docs. | [source](https://docs.polygon.technology/pos/overview/) | 2026-11-08 |
-| bnb | mainnet | none live yet |  |  | No official post-quantum statement found; the BNB Smart Chain docs pages read were dated 2024. | [source](https://docs.bnbchain.org/bnb-smart-chain/) | 2026-11-08 |
-| bitcoin | mainnet | none live yet |  |  | BIP-360 (P2MR) and BIP-361 are drafts; nothing is activated. | [source](https://github.com/bitcoin/bips/blob/master/bip-0360.mediawiki) | 2026-11-08 |
+| ethereum | mainnet | none live yet |  |  | EIP-8141 (frame transactions) is a draft, scheduled for the Hegota upgrade, which has no activation date. | [source](https://ethereum.org/roadmap/security/quantum-resistance/) | 2026-11-09 |
+| arbitrum | mainnet | none live yet |  |  | No official post-quantum statement found in the Arbitrum docs or blog. | [source](https://docs.arbitrum.io/) | 2026-11-09 |
+| optimism | mainnet | none live yet |  |  | A roadmap exists, nothing is live: the Post-Quantum Roadmap for the Superchain (2026-01-14) plans to retire ECDSA accounts by January 2036, subject to governance, and has not chosen a scheme. | [source](https://optimism.io/blog/a-post-quantum-roadmap-for-the-superchain) | 2026-11-09 |
+| base | mainnet | none live yet |  |  | No official post-quantum statement found. Optimism's Superchain roadmap does not name Base, which has run its own stack since its Azul upgrade (2026); its P256VERIFY precompile is not post-quantum. | [source](https://base.org/blog/introducing-base-azul) | 2026-11-09 |
+| polygon | mainnet | none live yet |  |  | No official post-quantum statement found in the Polygon PoS docs, blog or improvement proposals. | [source](https://docs.polygon.technology/pos/overview/) | 2026-11-09 |
+| bnb | mainnet | none live yet |  |  | Research only: a migration report (2026-05-14) benchmarked ML-DSA-44 transaction signatures; its proof of concept was not merged, and no BEP enables them. | [source](https://www.bnbchain.org/en/blog/bsc-post-quantum-cryptography-migration-report) | 2026-11-09 |
+| bitcoin | mainnet | none live yet |  |  | BIP-360 (P2MR, a witness v2 output with no key path) and BIP-361 (migration and legacy signature sunset) are drafts with no activation parameters; no post-quantum signature BIP exists, and Bitcoin Core 32.1 adds none. | [source](https://github.com/bitcoin/bips/blob/master/bip-0360.mediawiki) | 2026-11-13 |
 
 `multichain-indexer pq-status` prints the same table. It comes from one file,
 `multichain_indexer/pq/status.py`, where every row records when it was last checked.
@@ -50,10 +50,11 @@ does; its `pq.evidence` says how many.
 deployed on any public cluster. There is no detector until a deployed official program
 exists.
 
-**EVM chains and Bitcoin.** Nothing is live. Phase 4 (EVM) and Phase 5 (Bitcoin) use the same
-framework. Bitcoin will also report "quantum-exposed outputs": unspent outputs whose public
-key is already on chain, which BIP-341 and BIP-360 describe. P2PK and P2TR outputs carry the
-key in the output; P2PKH, P2WPKH, P2SH and P2WSH reveal it once spent.
+**EVM chains and Bitcoin.** Nothing is live. Bitcoin also reports, per address, whether its
+confirmed unspent outputs are quantum-exposed: P2PK and P2TR by script type; P2PKH and P2WPKH
+once the address has spent in a confirmed block; P2SH and P2WSH show "script revealed" once
+spent. The [Bitcoin page](chains/bitcoin.md#quantum-exposed-outputs) has the rule and its
+limits.
 
 ## Where it shows
 

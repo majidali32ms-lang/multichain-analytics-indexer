@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "multichain-analytics-indexer"
-version = "0.4.0"
+version = "0.7.0"
 description = "Index and analyse blockchain accounts and transactions, in each chain's own terms."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 authors = [{ name = "Majid Khan" }]
 license-files = ["LICENSE"]
-keywords = ["algorand", "solana", "near", "blockchain", "indexer", "analytics"]
+keywords = ["algorand", "solana", "near", "ethereum", "evm", "bitcoin", "blockchain", "indexer", "analytics"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -26,14 +26,18 @@ classifiers = [
 ]
 dependencies = [
     "aiohttp>=3.11,<4",
+    "alembic>=1.20,<2",
     "base58>=2.1,<3",
-    "click>=8.1,<9",
+    "click>=8.5,<9",
+    "embit==0.8.0",
     "pandas>=2.2,<4",
     "py-algorand-sdk>=2.12,<3",
     "pyarrow>=18",
     "pydantic>=2.10,<3",
     "python-dotenv>=1.0,<2",
     "solders>=0.29,<0.30",
+    "sqlalchemy>=2.1,<3",
+    "web3>=8.0,<9",
 ]
 
 [project.urls]
@@ -43,19 +47,32 @@ Issues = "https://github.com/majidali32ms-lang/multichain-analytics-indexer/issu
 [project.scripts]
 multichain-indexer = "multichain_indexer.cli:main"
 
+[project.optional-dependencies]
+postgres = [
+    "psycopg[binary]>=3.3,<4",
+]
+serve = [
+    "fastapi>=0.163,<0.164",
+    "uvicorn>=0.54,<0.55",
+]
+
 [dependency-groups]
 dev = [
     "build",
+    "fastapi>=0.163,<0.164",
+    "httpx2>=2.16.0",
     "ipykernel",
     "mypy",
     "nbclient",
     "nbformat",
     "pip-audit",
+    "psycopg[binary]>=3.3.9",
     "pytest",
     "pytest-asyncio",
     "pytest-cov",
     "ruff",
     "twine",
+    "uvicorn>=0.54,<0.55",
 ]
 docs = [
     "mkdocs-material",
@@ -94,9 +111,11 @@ ignore = ["N818"]
 
 [tool.mypy]
 strict = true
-packages = ["multichain_indexer"]
+# The plugin template is checked as strictly as the package it plugs into.
+mypy_path = "examples/plugin-template/src"
+packages = ["multichain_indexer", "examplechain_indexer"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["algosdk.*", "pandas.*"]
+module = ["algosdk.*", "embit.*", "pandas.*"]
 ignore_missing_imports = true

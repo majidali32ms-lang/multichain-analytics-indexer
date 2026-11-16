@@ -1,5 +1,127 @@
 # Changelog
 
+## 0.7.0
+
+Adds what only a tool for many chains can do: every chain at once.
+
+- `--chain all` for `metrics` (a side-by-side table, or `--json`), `export` (every chain in one
+  table: shared fields as columns, `native` as a JSON column) and `sync` (the accounts listed in
+  `config.toml`, chains in parallel; mainnet accounts only with `--network mainnet`). A chain
+  that fails shows its error and the others carry on; an export stops rather than leave a chain
+  out. `CrossChain` and `AsyncCrossChain` do the same from Python.
+- `report` writes the comparison as one offline HTML file with inline SVG charts, or as CSV or
+  JSON, with the same numbers `metrics --chain all` prints.
+- Fees in US dollars only for mainnet, from a price and date the user gives in `config.toml`.
+- `config.toml` for settings, endpoints, default networks, accounts and prices, below `.env` and
+  the environment. A key ending in `_API_KEY` or `_TOKEN` there is refused, and the error names
+  the key, never its value. Mainnet still needs `--network mainnet`. New `--config` option.
+- `sync ADDRESS --follow` repeats the incremental sync until Ctrl-C, with a pause per chain
+  (Bitcoin 60 s, Solana and NEAR 30 s, EVM chains 15 s, Algorand 10 s) or `--interval`.
+  `Indexer.follow` and `AsyncIndexer.follow` in Python.
+- One rate limiter per provider key shared by several chains (Blockscout, Etherscan, NodeReal,
+  Alchemy), and per host for keyless endpoints. Measured: three chains on one Blockscout key with
+  a limiter each drew HTTP 429 on 26 to 47 of 90 requests; one shared limiter, 0 or 1.
+- PostgreSQL storage with the `postgres` extra (psycopg 3): `--db postgresql://...` or
+  `MCI_DATABASE_URL`. Amounts are `NUMERIC`, times `TIMESTAMPTZ`, `native` blocks `JSONB`. The
+  URL's password never appears in logs or errors.
+- Alembic migrations for SQLite and PostgreSQL. A database written by 0.6.0 or earlier is stamped
+  at the first revision without touching a row; a test proves it on a database the released
+  0.6.0 package wrote.
+- `serve`, with the `serve` extra (FastAPI, uvicorn): a read-only HTTP API on 127.0.0.1 with
+  OpenAPI docs, pages of stored transactions, metrics per chain and across chains, accounts as
+  `index account` last stored them, and a request limit per client. By default no request
+  reaches the network or writes to the database; `serve --live-accounts` lets account lookups
+  read the chain and store the new state. `serve` never migrates: a database that is missing or
+  at an older schema is refused with the command that upgrades it, so a read-only database user
+  is enough.
+- Plugins: other packages add chains through the entry point group
+  `multichain_indexer.adapters`, imported only when used and never under a built-in chain's name.
+  A tested template is in `examples/plugin-template`, with a guide in the docs. `--network`
+  accepts any network name, which each adapter checks.
+- A Docker image and `docker-compose.yml` with PostgreSQL 18.7; the API is published on
+  127.0.0.1 only.
+- `scripts/benchmark.py` measures a first sync per chain; results are on the docs site.
+- Core changes, approved before they were made: shared rate limiters (`core/ratelimit.py`),
+  plugin entry points (`core/registry.py`), `Storage.stored_networks` (`core/storage.py`) and
+  `config.toml` (`core/config.py`, `core/config_file.py`).
+- New dependencies: `alembic` 1.20 and `SQLAlchemy` 2.1, with `Mako` and `MarkupSafe` through
+  alembic, because every database is migrated. Optional: `psycopg[binary]` 3.3 (`postgres`),
+  `fastapi` 0.163 and `uvicorn` 0.54 (`serve`). Click 8.5 or newer is now required.
+
+## 0.6.0
+
+Adds Bitcoin.
+
+- `--chain bitcoin`, testnet4 by default (BIP-94), `--network signet`, `--network mainnet` on
+  request, and `--network localnet` for a regtest node's Esplora server.
+- Data comes from an Esplora REST API: mempool.space's public servers by default, at one
+  request a second with retries, or your own server with `BITCOIN_<NETWORK>_ESPLORA_SERVER`.
+  `BITCOIN_<NETWORK>_HISTORY_SOURCE` chooses the source; a Bitcoin Core node is planned as a
+  second. Every lookup first checks the server's genesis block; a server of another network
+  stops with `WrongNetwork` and names the setting to fix, never the server.
+- Addresses of all five standard types (P2PKH, P2SH, P2WPKH, P2WSH, P2TR) and P2PK public keys
+  in hex, read with embit and checked against the network before any request: a mainnet
+  address on testnet4 is refused.
+- `index address` shows the balance in BTC, confirmed UTXOs, the mempool's effect and recent
+  txids; `index tx <txid>` shows one transaction. `Indexer.transaction()` reads one
+  transaction by its ID on any adapter that can.
+- Records keep every input, with the output it spends, and every output, with address,
+  script type and value in sats; size, weight, virtual size, fee in sats, fee rate in sat/vB
+  as mempool.space shows it, RBF signalling, SegWit, Taproot, coinbase, block and
+  confirmations. The fee is inputs minus outputs and must equal what the server reports. The
+  shared sender, receiver and amount follow a documented rule.
+- A transaction is final from six confirmations. A pending one whose block left the best
+  chain, or that left the mempool, becomes `orphaned`.
+- Metrics: fees in sats and BTC, average and median fee rate, output types and their share,
+  SegWit, Taproot and RBF shares, coinbase, OP_RETURN and unconfirmed counts.
+- Quantum-exposed outputs, per address as of query time from Esplora's confirmed totals: P2PK
+  and P2TR are exposed by script type, P2PKH and P2WPKH once the address has spent, P2SH and
+  P2WSH show "script revealed" once spent. The rule and its limits are in the README and docs.
+- The Bitcoin adapter imports only `core/`, so it can later ship on its own.
+- `core/http.py` adds `ApiClient.get_json_value`, which returns any JSON value (Esplora
+  answers with arrays and plain-text numbers) through the same retries, rate limiter and
+  cache; `get_json` and `post_json` are unchanged.
+- New dependency: `embit` 0.8.0, for Bitcoin addresses and public keys.
+- Post-quantum status of Bitcoin re-checked on 2026-11-13: BIP-360 and BIP-361 are drafts,
+  nothing is live.
+
+## 0.5.0
+
+Adds the EVM chains: Ethereum, Arbitrum, OP Mainnet, Base, Polygon PoS and BNB Smart Chain,
+through one adapter with a profile per chain.
+
+- `--chain ethereum|arbitrum|optimism|base|polygon|bnb`, testnet by default (Sepolia, Arbitrum
+  Sepolia, OP Sepolia, Base Sepolia, Amoy, BSC testnet), `--network mainnet` on request, and
+  `--network localnet` for a local node such as Anvil.
+- Every lookup first checks the RPC endpoint's `eth_chainId`; an endpoint of another network
+  stops with `WrongNetwork` and names the setting to fix, never the endpoint.
+- `index account`, `index contract` and `index token` (ERC-20, BEP-20 on BNB Smart Chain),
+  read at one block. A mixed-case address with a wrong EIP-55 checksum is refused.
+- Transactions and receipts come from the chain's own RPC: type, EIP-1559 fees, method
+  selector, ERC-20 and ERC-721 transfers, EIP-4844 blob gas, `l1Fee` and its parts on OP
+  Mainnet and Base, `gasUsedForL1` on Arbitrum. `fee` adds the blob fee and the L1 data fee.
+- Account history from a service chosen per chain and network with
+  `<CHAIN>_<NETWORK>_HISTORY_SOURCE`: Blockscout, Etherscan, NodeReal (BNB Smart Chain
+  mainnet), Alchemy (Base), or reading every block on `localnet`. Each needs its own free key
+  (`BLOCKSCOUT_API_KEY`, `ETHERSCAN_API_KEY`, `NODEREAL_API_KEY`, `ALCHEMY_API_KEY`); lookups
+  need none. BNB Smart Chain testnet has no free history service.
+- `<CHAIN>_<NETWORK>_HISTORY_SCOPE=all` also lists ERC-20 transfers to or from the address
+  inside other accounts' calls; `direct`, the default, lists what it sent or received.
+- `index account` prints "Powered by Etherscan.io APIs" under transactions Etherscan listed,
+  and records name their history service in `native.history_source`.
+- Metrics: gas, fees in the gas token and in wei split into execution, L1 data and blob fees,
+  Arbitrum's L1 share of gas, transaction types, top tokens and contracts.
+- Records up to the endpoint's finalized block are final. A sync never moves its checkpoint
+  past that block, nor past what NodeReal has indexed.
+- After each sync, stored pending records the history did not list again are checked again.
+  `BaseIndexer.recheck_pending` is new, a change to `core/`; by default it changes nothing, so
+  Algorand, Solana and NEAR behave as before. On EVM chains a record a reorg dropped becomes
+  `orphaned`; nothing is deleted. Databases from 0.4.0 load unchanged.
+- `load_transactions` takes an optional status filter.
+- New dependency: `web3`, for its address, hashing and ABI helpers.
+- Post-quantum status of the six EVM chains re-checked on 2026-11-09: still nothing live.
+  Optimism has a roadmap; BNB Smart Chain a research report.
+
 ## 0.4.0
 
 Adds post-quantum readiness.

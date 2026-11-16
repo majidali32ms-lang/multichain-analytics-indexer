@@ -1,0 +1,57 @@
+{
+  "chain": "bnb",
+  "network": "BNB Smart Chain testnet",
+  "transaction": {
+    "blockHash": "0xbc1b60489790a22e99ec93c54819048b23e8aa3d420f0688d8758300f257a375",
+    "blockNumber": "0x873237a",
+    "blockTimestamp": "0x6af1ff51",
+    "from": "0x1fd6a75cc72f39147756a663f3ef1fc95ef89495",
+    "gas": "0xcf08",
+    "gasPrice": "0x5f5e100",
+    "maxFeePerGas": "0x5f5e100",
+    "maxPriorityFeePerGas": "0x5f5e100",
+    "hash": "0x1bc972690408b216ddd92047c9ab6607b423c900190ca6424767c79d25de7d51",
+    "input": "0x",
+    "nonce": "0x1057d99",
+    "to": "0xff00000000000000000000000000000000005611",
+    "transactionIndex": "0x2",
+    "value": "0x0",
+    "type": "0x3",
+    "accessList": [],
+    "chainId": "0x61",
+    "v": "0x1",
+    "r": "0x9dcd40eb9fd1bb8842fa94a1af86998b04c8ee49836797d97b9681c779078704",
+    "s": "0x7c11db26d32498b9cb5d03a23c4143c1f746354368bcb30fc7e980350f1bd212",
+    "yParity": "0x1",
+    "maxFeePerBlobGas": "0x1",
+    "blobVersionedHashes": [
+      "0x013927c2ce2dd89411a2bfaef5c766c9ca93d2ad3d7629ef4574a1310d34b1bd"
+    ]
+  },
+  "receipt": {
+    "type": "0x3",
+    "from": "0x1fd6a75cc72f39147756a663f3ef1fc95ef89495",
+    "to": "0xff00000000000000000000000000000000005611",
+    "status": "0x1",
+    "cumulativeGasUsed": "0xe620a",
+    "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "logs": [],
+    "transactionHash": "0x1bc972690408b216ddd92047c9ab6607b423c900190ca6424767c79d25de7d51",
+    "contractAddress": null,
+    "gasUsed": "0x5208",
+    "blockHash": "0xbc1b60489790a22e99ec93c54819048b23e8aa3d420f0688d8758300f257a375",
+    "blockNumber": "0x873237a",
+    "transactionIndex": "0x2",
+    "effectiveGasPrice": "0x5f5e100",
+    "blobGasUsed": "0x20000",
+    "blobGasPrice": "0x1"
+  },
+  "block": {
+    "number": "0x873237a",
+    "hash": "0xbc1b60489790a22e99ec93c54819048b23e8aa3d420f0688d8758300f257a375",
+    "timestamp": "0x6af1ff51",
+    "baseFeePerGas": "0x0",
+    "blobGasUsed": "0x20000",
+    "excessBlobGas": "0x0"
+  }
+}

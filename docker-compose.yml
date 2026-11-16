@@ -1,0 +1,57 @@
+# The indexer and a PostgreSQL database in one command:
+#
+#   echo "POSTGRES_PASSWORD=choose-one" >> .env
+#   docker compose up -d
+#   docker compose run --rm indexer --chain bitcoin sync tb1q...
+#
+# The HTTP API is published on this machine's 127.0.0.1:8000 only.
+
+services:
+  db:
+    image: postgres:18.7@sha256:2ea8630df176ad090ec92136dee850397c5af8781e4bcf2e4162593691c61bbc
+    environment:
+      POSTGRES_DB: indexer
+      POSTGRES_USER: indexer
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      # PostgreSQL 18 images keep their data in a versioned folder below this one.
+      - database:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U indexer -d indexer"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  indexer:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      MCI_DATABASE_URL: postgresql://indexer:${POSTGRES_PASSWORD}@db:5432/indexer
+    # serve never writes, not even a migration, so an ordinary command brings the database
+    # schema up to date before each command this service runs.
+    entrypoint:
+      - sh
+      - -c
+      - multichain-indexer --chain all metrics > /dev/null && exec multichain-indexer "$$@"
+      - multichain-indexer
+    command: ["serve", "--host", "0.0.0.0"]
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+volumes:
+  database:

@@ -24,15 +24,26 @@ from multichain_indexer.core.models import (
     TransactionPage,
     TransactionRecord,
 )
+from multichain_indexer.crosschain import (
+    AsyncCrossChain,
+    ChainMetrics,
+    CrossChain,
+    CrossChainReport,
+    SyncOutcome,
+)
 
-__version__ = "0.4.0"
+__version__ = "0.7.0"
 
 __all__ = [
     "AccountRecord",
     "AssetRecord",
+    "AsyncCrossChain",
     "AsyncIndexer",
+    "ChainMetrics",
     "ConfigError",
     "ContractRecord",
+    "CrossChain",
+    "CrossChainReport",
     "Indexer",
     "IndexerError",
     "InvalidAddress",
@@ -44,6 +55,7 @@ __all__ = [
     "NotFound",
     "RateLimited",
     "Status",
+    "SyncOutcome",
     "SyncResult",
     "TransactionPage",
     "TransactionRecord",

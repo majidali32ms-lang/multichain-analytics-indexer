@@ -1,0 +1,52 @@
+{
+  "chain": "arbitrum",
+  "network": "Arbitrum Sepolia",
+  "transaction": {
+    "blockHash": "0xe258f0b67120fca4c420680935065dae10b6dd00b988a16d1e87f9fb0c3be226",
+    "blockNumber": "0x13870c99",
+    "blockTimestamp": "0x6af1fefa",
+    "from": "0x07ed3f86dd165884d6c26ef35f94f0af0761562e",
+    "gas": "0x5208",
+    "gasPrice": "0x3ccff670",
+    "maxFeePerGas": "0x77359400",
+    "maxPriorityFeePerGas": "0x3b9aca00",
+    "hash": "0x39a173e973bd4923540a7c0b6b427344d45498edd7b232c05db171dbdfeb20bc",
+    "input": "0x",
+    "nonce": "0x311",
+    "to": "0x0708c338a0b9f62f327f2bf5365de3951adee5b4",
+    "transactionIndex": "0x2",
+    "value": "0xaa87bee538000",
+    "type": "0x2",
+    "accessList": [],
+    "chainId": "0x66eee",
+    "v": "0x0",
+    "r": "0x698e08efa5aacc68913a8bf6d6955e4f37ec225a8e603571c3b657b1c3553450",
+    "s": "0x419f7117a8e87a7daf2a5fcea9c1b2c6cf6ae4114d02cd97f3103a9f6efbab7f",
+    "yParity": "0x0"
+  },
+  "receipt": {
+    "blockHash": "0xe258f0b67120fca4c420680935065dae10b6dd00b988a16d1e87f9fb0c3be226",
+    "blockNumber": "0x13870c99",
+    "contractAddress": null,
+    "cumulativeGasUsed": "0x93024",
+    "effectiveGasPrice": "0x3ccff670",
+    "from": "0x07ed3f86dd165884d6c26ef35f94f0af0761562e",
+    "gasUsed": "0x5208",
+    "gasUsedForL1": "0x0",
+    "l1BlockNumber": "0xb89d69",
+    "logs": [],
+    "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "status": "0x1",
+    "timeboosted": false,
+    "to": "0x0708c338a0b9f62f327f2bf5365de3951adee5b4",
+    "transactionHash": "0x39a173e973bd4923540a7c0b6b427344d45498edd7b232c05db171dbdfeb20bc",
+    "transactionIndex": "0x2",
+    "type": "0x2"
+  },
+  "block": {
+    "number": "0x13870c99",
+    "hash": "0xe258f0b67120fca4c420680935065dae10b6dd00b988a16d1e87f9fb0c3be226",
+    "timestamp": "0x6af1fefa",
+    "baseFeePerGas": "0x1352c70"
+  }
+}

@@ -35,7 +35,7 @@ from multichain_indexer.core.models import (
     TransactionPage,
     TransactionRecord,
 )
-from multichain_indexer.core.ratelimit import RateLimiter
+from multichain_indexer.core.ratelimit import host_scope, shared_limiter
 
 LOCALNET = "localnet"
 PUBLIC_NETWORKS = frozenset({"mainnet", "testnet"})
@@ -210,11 +210,12 @@ def create_indexer(
     chosen = network or PROFILE.default_network
     if chosen not in PROFILE.networks:
         raise InvalidInput(f"unknown NEAR network {chosen!r}: {', '.join(PROFILE.networks)}")
+    server = settings.endpoint(CHAIN, chosen, "RPC_SERVER", DEFAULT_RPC_SERVERS[chosen])
     client = ApiClient(
-        settings.endpoint(CHAIN, chosen, "RPC_SERVER", DEFAULT_RPC_SERVERS[chosen]),
+        server,
         timeout=settings.request_timeout,
         max_retries=settings.max_retries,
-        limiter=RateLimiter(_rpc_requests_per_second(settings)),
+        limiter=shared_limiter(host_scope(server), _rpc_requests_per_second(settings)),
     )
     return NearIndexer(
         chosen,

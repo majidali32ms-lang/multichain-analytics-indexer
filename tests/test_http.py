@@ -199,3 +199,54 @@ async def test_rate_limiter_gives_concurrent_callers_their_own_slot() -> None:
 def test_rate_limiter_rejects_a_zero_rate() -> None:
     with pytest.raises(ValueError, match="positive"):
         RateLimiter(0)
+
+
+@pytest.mark.parametrize(
+    ("reply", "value"),
+    [
+        (Reply(body=[{"height": 0}]), [{"height": 0}]),
+        (Reply(raw="131072"), 131072),
+        (Reply(body={"round": 7}), {"round": 7}),
+        (Reply(body=None), None),
+    ],
+)
+async def test_any_json_value_is_returned_as_decoded(
+    node: FakeNode, make_client: ClientFactory, reply: Reply, value: object
+) -> None:
+    node.routes["/blocks/tip/height"] = reply
+    client = make_client()
+    assert await client.get_json_value("/blocks/tip/height", {"limit": 2}) == value
+    assert node.requests == [("/blocks/tip/height", {"limit": "2"})]
+
+
+async def test_a_value_that_is_not_json_is_malformed(
+    node: FakeNode, make_client: ClientFactory
+) -> None:
+    node.routes["/x"] = Reply(raw="00000000da84f2ba")
+    with pytest.raises(MalformedResponse, match="not JSON"):
+        await make_client().get_json_value("/x")
+
+
+async def test_any_json_value_is_retried_like_an_object(
+    node: FakeNode, make_client: ClientFactory
+) -> None:
+    node.routes["/x"] = [Reply({"message": "busy"}, status=503), Reply(body=[1, 2])]
+    client = make_client()
+    assert await client.get_json_value("/x") == [1, 2]
+    assert client.requests_made == 2
+
+
+async def test_any_json_value_is_cached_when_immutable(
+    node: FakeNode, make_client: ClientFactory, tmp_path: Path
+) -> None:
+    node.routes["/blocks/0"] = Reply(body=[{"id": "genesis"}])
+    cache = ResponseCache(tmp_path / "cache.db")
+    client = make_client(cache=cache)
+
+    await client.get_json_value("/blocks/0", immutable=True)
+    assert await client.get_json_value("/blocks/0", immutable=True) == [{"id": "genesis"}]
+    assert client.requests_made == 1
+
+    await client.get_json_value("/blocks/0")
+    assert client.requests_made == 2
+    cache.close()

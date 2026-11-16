@@ -111,6 +111,18 @@ class BaseIndexer(ABC):
     async def aclose(self) -> None:
         """Release network resources."""
 
+    async def recheck_pending(
+        self, records: Sequence[TransactionRecord]
+    ) -> list[TransactionRecord]:
+        """Return the stored pending ``records`` whose state on the chain has changed.
+
+        A sync calls this for pending records it did not fetch again: a transaction can
+        leave an account's history when a reorg drops it. A changed record is returned with
+        its new status, ``orphaned`` when the chain no longer holds it; records are never
+        deleted. Chains that have nothing to check return an empty list, the default.
+        """
+        return []
+
     def final_height(self, head: int) -> int:
         """Return the newest height at or below ``head`` that can never change.
 
