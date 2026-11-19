@@ -354,3 +354,30 @@ def test_opbnb_holder_report_without_a_key_reads_the_newest_block() -> None:
         report = indexer.token_holders(OPBNB_TOKEN, from_block=head - 40)
     assert report.to_block >= head
     assert report.from_time <= report.to_time
+
+
+@pytest.mark.parametrize("network", ["mainnet", "testnet"])
+def test_bnb_validator_set_has_names(network: str) -> None:
+    with Indexer("bnb", network, settings=Settings()) as indexer:
+        validator_set = indexer.validators()
+    assert len(validator_set.validators) >= 4
+    named = [validator for validator in validator_set.validators if validator.moniker]
+    assert len(named) * 2 > len(validator_set.validators)
+
+
+async def test_bnb_block_system_transaction_is_labelled() -> None:
+    adapter = create_indexer("bnb", "mainnet", Settings())
+    assert isinstance(adapter, EvmIndexer)
+    try:
+        head = await adapter.chain_head()
+        transactions = await adapter._rpc.block_transactions(head - 3)
+        header = await adapter._rpc.block_header(head - 3, immutable=False)
+        system = [
+            tx for tx in transactions if str(tx["from"]).lower() == str(header["miner"]).lower()
+        ]
+        record = await adapter.fetch_transaction(str(system[-1]["hash"]))
+    finally:
+        await adapter.aclose()
+    assert record.native.bnb is not None
+    assert record.native.bnb.system_transaction
+    assert record.native.bnb.validator.lower() == str(header["miner"]).lower()

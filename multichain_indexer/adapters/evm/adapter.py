@@ -16,6 +16,7 @@ from typing import ClassVar, cast
 from pydantic import JsonValue
 
 from multichain_indexer.adapters.evm.alchemy import create_alchemy_history
+from multichain_indexer.adapters.evm.bsc import read_validators
 from multichain_indexer.adapters.evm.client import EvmRpc
 from multichain_indexer.adapters.evm.encoding import parse_quantity
 from multichain_indexer.adapters.evm.explorer import (
@@ -44,6 +45,7 @@ from multichain_indexer.adapters.evm.models import (
     EvmToken,
     EvmTokenHolders,
     EvmTransaction,
+    EvmValidatorSet,
 )
 from multichain_indexer.adapters.evm.nodereal import (
     HOLDER_COUNT_COMPUTE_UNITS,
@@ -101,6 +103,7 @@ MILLISECONDS_PER_SECOND = 1000
 TWO_THIRDS_OF_VALIDATORS = -2
 ECONOMIC_FINALITY_SOURCE = "eth_getFinalizedHeader"
 FINALIZED_TAG_SOURCE = "finalized tag"
+BNB_CHAIN_NAME = "bnb"
 HEX_CHARACTERS = frozenset("0123456789abcdefABCDEF")
 
 HISTORY_SOURCES: dict[str, HistorySourceFactory] = {
@@ -274,6 +277,24 @@ class EvmIndexer(BaseIndexer):
             if extra is not self._rpc:
                 self._extra_requests += extra.requests_made
                 await extra.aclose()
+
+    async def fetch_validators(self) -> EvmValidatorSet:
+        """Return BNB Smart Chain's current validators with their registered names.
+
+        Raises:
+            UnsupportedChain: The chain is not BNB Smart Chain.
+        """
+        if self.chain.name != BNB_CHAIN_NAME:
+            raise UnsupportedChain(f"{self.chain.title} has no BNB Smart Chain validator set")
+        await self._require_chain()
+        block = await self._rpc.block_number()
+        return EvmValidatorSet(
+            chain=self.chain.name,
+            network=self.network,
+            block_number=block,
+            observed_at=datetime.now(UTC),
+            validators=await read_validators(self._rpc, block),
+        )
 
     async def fetch_contract(self, contract_id: str) -> ContractRecord:
         address = self.validate_address(contract_id)
@@ -562,6 +583,10 @@ class EvmIndexer(BaseIndexer):
             fields["Blobs"] = str(native.blob.blob_count)
         if native.token_transfers:
             fields["Token transfers"] = self._token_transfer_summary(native)
+        if native.bnb:
+            fields["Validator"] = native.bnb.validator
+            if native.bnb.system_transaction:
+                fields["System transaction"] = f"yes, to {native.bnb.system_contract}"
         return fields
 
     def _token_transfer_summary(self, native: EvmTransaction) -> str:

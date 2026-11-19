@@ -309,6 +309,22 @@ def index_holders(
         click.echo(f"  {day}  {count}")
 
 
+@index.command("validators")
+@click.pass_obj
+@_with_indexer
+def index_validators(indexer: Indexer) -> None:
+    """Show BNB Smart Chain's current validators: consensus address, operator and name."""
+    _require_chain(indexer, "bnb", "index validators")
+    validator_set = indexer.validators()
+    click.echo(
+        f"{len(validator_set.validators)} validators at block {validator_set.block_number} "
+        f"({_milliseconds(validator_set.observed_at)})"
+    )
+    for validator in validator_set.validators:
+        name = validator.moniker or "no name registered"
+        click.echo(f"  {validator.consensus_address}  {name}")
+
+
 @index.command("asset")
 @click.argument("asa_id")
 @click.pass_obj

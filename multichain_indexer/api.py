@@ -44,7 +44,11 @@ from multichain_indexer.follow import (
 if TYPE_CHECKING:
     # Only for annotations: the EVM adapter is loaded when an EVM chain is used, so the API
     # imports without it.
-    from multichain_indexer.adapters.evm.models import EvmFinality, EvmTokenHolders
+    from multichain_indexer.adapters.evm.models import (
+        EvmFinality,
+        EvmTokenHolders,
+        EvmValidatorSet,
+    )
 
 DEFAULT_TRANSACTION_LIMIT = 20
 _T = TypeVar("_T")
@@ -63,6 +67,13 @@ class _FinalityLookup(Protocol):
     """An adapter that reports how far its finalized block trails the newest one."""
 
     async def fetch_finality(self) -> EvmFinality: ...
+
+
+@runtime_checkable
+class _ValidatorLookup(Protocol):
+    """An adapter that can read BNB Smart Chain's validator set."""
+
+    async def fetch_validators(self) -> EvmValidatorSet: ...
 
 
 @runtime_checkable
@@ -178,6 +189,16 @@ class AsyncIndexer:
         return await self._indexer.fetch_token_holders(
             token, from_block=from_block, to_block=to_block, nodereal_count=nodereal_count
         )
+
+    async def validators(self) -> EvmValidatorSet:
+        """Read BNB Smart Chain's current validators and their names. Nothing is stored.
+
+        Raises:
+            UnsupportedChain: The chain is not BNB Smart Chain.
+        """
+        if not isinstance(self._indexer, _ValidatorLookup):
+            raise UnsupportedChain(f"{self.profile.name} has no BNB Smart Chain validator set")
+        return await self._indexer.fetch_validators()
 
     async def asset(self, asset_id: str | int) -> AssetRecord:
         """Fetch a token or asset, such as an Algorand ASA, and store it."""
@@ -369,6 +390,10 @@ class Indexer:
                 token, from_block=from_block, to_block=to_block, nodereal_count=nodereal_count
             )
         )
+
+    def validators(self) -> EvmValidatorSet:
+        """See ``AsyncIndexer.validators``."""
+        return self._thread.run(self._inner.validators())
 
     def asset(self, asset_id: str | int) -> AssetRecord:
         """See ``AsyncIndexer.asset``."""

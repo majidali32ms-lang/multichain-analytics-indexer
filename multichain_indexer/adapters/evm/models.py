@@ -86,6 +86,16 @@ class EvmArbitrumGas(NativeData):
     timeboosted: bool | None = None
 
 
+class EvmBnbLabels(NativeData):
+    """BNB Smart Chain's labels for a transaction: ``validator`` produced its block (the
+    coinbase); ``system_transaction`` is true for the block's own system calls, which Parlia
+    adds at no gas price; ``system_contract`` names the system contract it calls, if any."""
+
+    validator: str
+    system_transaction: bool
+    system_contract: str | None = None
+
+
 class EvmTransaction(NativeData):
     """A transaction and its receipt. Gas prices are in wei per gas.
 
@@ -94,7 +104,7 @@ class EvmTransaction(NativeData):
     name. ``execution_fee`` is ``gas_used * effective_gas_price``; the record's ``fee`` adds
     the blob fee and the L1 data fee where the chain charges them. ``history_source`` names
     the service that listed the transaction for an account's history, such as ``etherscan``;
-    it is None for a transaction read by hash.
+    it is None for a transaction read by hash. ``bnb`` carries BNB Smart Chain's own labels.
     """
 
     kind: str
@@ -117,6 +127,7 @@ class EvmTransaction(NativeData):
     blob: EvmBlobGas | None = None
     l1_data: EvmL1DataFee | None = None
     arbitrum: EvmArbitrumGas | None = None
+    bnb: EvmBnbLabels | None = None
     history_source: str | None = None
 
 
@@ -194,3 +205,28 @@ class EvmTokenHolders(BaseModel):
     nodereal_holder_count: int | None = Field(default=None, ge=0)
     nodereal_compute_units: int | None = Field(default=None, ge=0)
     observed_at: datetime
+
+
+class EvmValidator(BaseModel):
+    """A BNB Smart Chain validator: the consensus address that signs its blocks (a block's
+    coinbase), its operator address in StakeHub, and the name and website it registered."""
+
+    model_config = ConfigDict(frozen=True)
+
+    consensus_address: str
+    operator_address: str | None = None
+    moniker: str | None = None
+    website: str | None = None
+
+
+class EvmValidatorSet(BaseModel):
+    """BNB Smart Chain's current validators, read at ``block_number`` from BSCValidatorSet's
+    ``getValidators()`` and StakeHub's ``consensusToOperator`` and ``getValidatorDescription``."""
+
+    model_config = ConfigDict(frozen=True)
+
+    chain: str
+    network: str
+    block_number: int = Field(ge=0)
+    observed_at: datetime
+    validators: tuple[EvmValidator, ...]

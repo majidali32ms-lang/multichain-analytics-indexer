@@ -63,6 +63,20 @@ def evm_metrics(
             ),
         ),
         "post_quantum": pq_share(records),
+        **_bnb_metrics(natives),
+    }
+
+
+def _bnb_metrics(natives: Sequence[EvmTransaction]) -> dict[str, JsonValue]:
+    """BNB Smart Chain only: its system transactions, and the validators of the blocks."""
+    labels = [native.bnb for native in natives if native.bnb]
+    if not labels:
+        return {}
+    return {
+        "bnb_system_transactions": sum(1 for label in labels if label.system_transaction),
+        "top_validators_by_transactions": _ranked(
+            "validator", Counter(label.validator for label in labels)
+        ),
     }
 
 

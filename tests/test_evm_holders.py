@@ -24,6 +24,7 @@ from multichain_indexer import (
 from multichain_indexer.adapters.evm import balances as balances_module
 from multichain_indexer.adapters.evm import holders as holders_module
 from multichain_indexer.adapters.evm import logs as logs_module
+from multichain_indexer.adapters.evm import multicall as multicall_module
 from multichain_indexer.adapters.evm import nodereal as nodereal_module
 from multichain_indexer.adapters.evm.adapter import EvmIndexer, indexer_factory
 from multichain_indexer.adapters.evm.client import EvmRpc
@@ -127,7 +128,9 @@ async def test_report_matches_the_saved_run(node: FakeNode, opbnb: EvmIndexer) -
     expected = {**SAVED["report"], "observed_at": report.observed_at}
     assert report == EvmTokenHolders.model_validate(expected)
     assert report.holders_at_end + report.exited_holders <= report.active_addresses
-    multicall = [p for p in node.rpc_params("eth_call") if p[0]["to"] == balances_module.MULTICALL3]
+    multicall = [
+        p for p in node.rpc_params("eth_call") if p[0]["to"] == multicall_module.MULTICALL3
+    ]
     assert len(multicall) == 1
 
 
@@ -319,7 +322,7 @@ async def test_multicall_replies_are_checked(
 async def test_multicall_batches_hold_at_most_its_limit(
     node: FakeNode, rpc: EvmRpc, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(balances_module, "CALLS_PER_BATCH", 2)
+    monkeypatch.setattr(multicall_module, "CALLS_PER_BATCH", 2)
     node.routes["rpc:eth_getCode"] = rpc_ok("0x60")
     word = encode(["uint256"], [3])
     node.routes["rpc:eth_call"] = [
