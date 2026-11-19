@@ -423,3 +423,17 @@ def test_cas20_holder_report_from_its_creation() -> None:
     assert report.transfers == 102
     assert report.new_holders == report.active_addresses
     assert report.inconsistent_addresses == 0
+
+
+BNB_EXAMPLES = Path(__file__).parent.parent / "examples" / "bnb"
+
+
+def test_bnb_token_report_script_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys, "argv", ["token_report.py"])
+    runpy.run_path(str(BNB_EXAMPLES / "token_report.py"), run_name="__main__")
+
+
+@pytest.mark.filterwarnings("ignore:Proactor event loop:RuntimeWarning")
+def test_bnb_token_report_notebook_runs() -> None:
+    notebook = nbformat.read(BNB_EXAMPLES / "token_report.ipynb", as_version=4)
+    NotebookClient(notebook, timeout=300, kernel_name="python3").execute()
