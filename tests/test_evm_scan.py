@@ -12,6 +12,7 @@ import pytest
 from pydantic import SecretStr
 
 from multichain_indexer import ConfigError, MalformedResponse
+from multichain_indexer.adapters.evm import logs as logs_module
 from multichain_indexer.adapters.evm import scan as scan_module
 from multichain_indexer.adapters.evm.adapter import EvmIndexer, indexer_factory
 from multichain_indexer.adapters.evm.profiles import BNB, ETHEREUM
@@ -61,7 +62,7 @@ def settings_for(node: FakeNode, tmp_path: Path, **env: str) -> Settings:
 
 @pytest.fixture(autouse=True)
 def no_pause(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(scan_module, "LOGS_REQUESTS_PER_SECOND", 1000)
+    monkeypatch.setattr(logs_module, "LOGS_REQUESTS_PER_SECOND", 1000)
 
 
 @pytest.fixture

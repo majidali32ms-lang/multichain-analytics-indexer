@@ -19,8 +19,11 @@ from nbclient import NotebookClient
 from pydantic import SecretStr
 
 from multichain_indexer import Indexer, WrongNetwork
-from multichain_indexer.adapters.evm import EvmIndexer
+from multichain_indexer.adapters.evm import EvmIndexer, holders
+from multichain_indexer.adapters.evm.balances import read_balances
+from multichain_indexer.adapters.evm.logs import iter_logs, nodereal_rpc
 from multichain_indexer.adapters.evm.profiles import BNB, EVM_CHAINS
+from multichain_indexer.adapters.evm.transactions import TRANSFER_TOPIC
 from multichain_indexer.core.config import Settings
 from multichain_indexer.core.registry import create_indexer
 
@@ -307,3 +310,47 @@ async def test_base_mainnet_history_from_alchemy() -> None:
         await adapter.aclose()
     assert tuple(record.id for record in records) == BASE_WETH_TRANSACTIONS
     assert {record.native.history_source for record in records} == {"alchemy"}
+
+
+CAKE = "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82"
+# A busy BEP-20 token on opBNB mainnet: 2,057 transfers in 3,000 blocks on 2026-11-19.
+OPBNB_TOKEN = "0x9e5aac1ba1a2e6aed6b32689dfcf62a509ca96f3"
+CAKE_RANGE = (133_900_000, 133_900_400)
+
+
+async def test_holder_report_agrees_with_balances_read_before_the_range() -> None:
+    require_key("NODEREAL_API_KEY")
+    settings = Settings.from_env()
+    adapter = create_indexer("bnb", "mainnet", settings)
+    assert isinstance(adapter, EvmIndexer)
+    low, high = CAKE_RANGE
+    nodereal = nodereal_rpc(BNB, "mainnet", settings)
+    assert nodereal is not None
+    try:
+        report = await adapter.fetch_token_holders(CAKE, from_block=low, to_block=high)
+        windows = iter_logs(nodereal, low, high, [TRANSFER_TOPIC], CAKE)
+        parties = {
+            party
+            async for window in windows
+            for move in holders._moves(window)
+            for party in (move.sender, move.receiver)
+        } - {holders.ZERO_ADDRESS}
+        active = sorted(parties)
+        before = await read_balances(nodereal, CAKE, active, low - 1)
+        after = await read_balances(nodereal, CAKE, active, high)
+    finally:
+        await nodereal.aclose()
+        await adapter.aclose()
+    assert report.active_addresses == len(active)
+    assert report.new_holders == sum(1 for a in active if before[a] == 0 and after[a] > 0)
+    assert report.exited_holders == sum(1 for a in active if before[a] > 0 and after[a] == 0)
+    assert report.inconsistent_addresses == 0
+    assert report.transfers > 0
+
+
+def test_opbnb_holder_report_without_a_key_reads_the_newest_block() -> None:
+    with Indexer("opbnb", "mainnet", settings=Settings()) as indexer:
+        head = indexer.finality().head_block
+        report = indexer.token_holders(OPBNB_TOKEN, from_block=head - 40)
+    assert report.to_block >= head
+    assert report.from_time <= report.to_time

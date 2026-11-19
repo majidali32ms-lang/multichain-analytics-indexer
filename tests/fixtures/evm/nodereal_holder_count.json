@@ -1,0 +1,27 @@
+{
+  "method": "nr_getTokenHolderCount",
+  "read_on": "2026-11-19",
+  "token": "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
+  "replies": {
+    "bnb mainnet": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "result": "0x1cecbe"
+      }
+    },
+    "opbnb testnet": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": null
+    },
+    "bnb testnet": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "error": {
+        "code": -32601,
+        "message": "the method nr_getTokenHolderCount does not exist/is not available"
+      }
+    }
+  }
+}

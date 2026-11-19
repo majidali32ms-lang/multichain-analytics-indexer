@@ -29,15 +29,27 @@ from multichain_indexer.adapters.evm.history import (
     HistorySourceFactory,
     SourceContext,
 )
+from multichain_indexer.adapters.evm.holders import HolderQuery, HolderSources, token_holders
+from multichain_indexer.adapters.evm.logs import (
+    NODEREAL_RPC_SERVERS,
+    PUBLIC_LOGS_REFUSED,
+    logs_rpc,
+    nodereal_rpc,
+)
 from multichain_indexer.adapters.evm.metrics import evm_metrics
 from multichain_indexer.adapters.evm.models import (
     EvmAccount,
     EvmContract,
     EvmFinality,
     EvmToken,
+    EvmTokenHolders,
     EvmTransaction,
 )
-from multichain_indexer.adapters.evm.nodereal import create_nodereal_history
+from multichain_indexer.adapters.evm.nodereal import (
+    HOLDER_COUNT_COMPUTE_UNITS,
+    create_nodereal_history,
+    nodereal_holder_count,
+)
 from multichain_indexer.adapters.evm.parser import (
     is_contract_code,
     parse_account,
@@ -127,6 +139,7 @@ class EvmIndexer(BaseIndexer):
         self._history_name: str | None = None
         self._chain_confirmed = False
         self._finalized_height = 0
+        self._extra_requests = 0
 
     def validate_address(self, address: str) -> str:
         return validated_address(address)
@@ -169,6 +182,98 @@ class EvmIndexer(BaseIndexer):
             chain=self.chain.name,
             network=self.network,
         )
+
+    async def fetch_token_holders(
+        self,
+        token: str,
+        *,
+        from_block: int,
+        to_block: int | None = None,
+        nodereal_count: bool = False,
+    ) -> EvmTokenHolders:
+        """Return holder figures for a token over ``from_block`` to ``to_block``.
+
+        Balances are read at ``to_block``. Public endpoints keep only recent state, so with
+        ``NODEREAL_API_KEY`` set, BNB Smart Chain and opBNB read state from NodeReal, which
+        keeps all of it, and ``to_block`` defaults to the newest finalized block; without it
+        ``to_block`` defaults to the newest block. ``nodereal_count`` adds NodeReal's own
+        full-chain holder count (free key, 50 compute units).
+
+        Raises:
+            InvalidInput: The range is outside the chain, too many addresses moved the token,
+                or the endpoint no longer keeps the state of ``to_block``.
+            ConfigError: The logs or the count need ``NODEREAL_API_KEY``.
+        """
+        address = self.validate_address(token)
+        await self._require_chain()
+        head = await self.chain_head()
+        sources = self._holder_sources()
+        try:
+            last = self._holder_range_end(to_block, head, sources.state is not self._rpc)
+            query = HolderQuery(
+                chain=self.chain.name,
+                network=self.network,
+                token=address,
+                standard=self.chain.token_standard,
+                from_block=from_block,
+                to_block=last,
+            )
+            report = await token_holders(sources, query)
+        finally:
+            await self._close_extra(sources)
+        if not nodereal_count:
+            return report
+        count = await nodereal_holder_count(self._settings, self.chain.name, self.network, address)
+        self._extra_requests += 1
+        return report.model_copy(
+            update={
+                "nodereal_holder_count": count,
+                "nodereal_compute_units": HOLDER_COUNT_COMPUTE_UNITS,
+            }
+        )
+
+    def _holder_sources(self) -> HolderSources:
+        # NodeReal keeps all state, so with its key it reads balances at any block; on BNB Smart
+        # Chain it also serves the logs the public endpoints refuse.
+        nodereal = nodereal_rpc(self.chain, self.network, self._settings)
+        refused = (self.chain.name, self.network) in PUBLIC_LOGS_REFUSED
+        if nodereal is not None and refused:
+            logs = nodereal
+        else:
+            logs = logs_rpc(self.chain, self.network, self._settings, self._rpc, "Transfer logs")
+        return HolderSources(
+            blocks=self._rpc,
+            state=nodereal or self._rpc,
+            logs=logs,
+            state_hint=self._state_hint(),
+        )
+
+    def _holder_range_end(self, to_block: int | None, head: int, archive_state: bool) -> int:
+        """Return the report's last block; without archive state, the newest block, whose
+        state every endpoint still keeps.
+
+        Raises:
+            InvalidInput: ``to_block`` is past the newest block.
+        """
+        if to_block is None:
+            return self.final_height(head) if archive_state else head
+        if to_block > head:
+            raise InvalidInput(f"--to-block {to_block} is past the newest block, {head}")
+        return to_block
+
+    def _state_hint(self) -> str:
+        if (self.chain.name, self.network) in NODEREAL_RPC_SERVERS:
+            return (
+                "set NODEREAL_API_KEY (free; NodeReal keeps all state), or end the range "
+                "within about 100 blocks of the newest block"
+            )
+        return "end the range within the endpoint's recent blocks, or use an archive endpoint"
+
+    async def _close_extra(self, sources: HolderSources) -> None:
+        for extra in {id(rpc): rpc for rpc in (sources.state, sources.logs)}.values():
+            if extra is not self._rpc:
+                self._extra_requests += extra.requests_made
+                await extra.aclose()
 
     async def fetch_contract(self, contract_id: str) -> ContractRecord:
         address = self.validate_address(contract_id)
@@ -318,7 +423,7 @@ class EvmIndexer(BaseIndexer):
     @property
     def requests_made(self) -> int:
         history = self._history.requests_made if self._history else 0
-        return self._rpc.requests_made + history
+        return self._rpc.requests_made + history + self._extra_requests
 
     async def aclose(self) -> None:
         await self._rpc.aclose()

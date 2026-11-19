@@ -16,10 +16,9 @@ endpoints refuse ``eth_getLogs``, so on its testnet the logs come from NodeReal 
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from typing import NamedTuple
 
-from pydantic import JsonValue, SecretStr
+from pydantic import JsonValue
 
 from multichain_indexer.adapters.evm.client import EvmRpc
 from multichain_indexer.adapters.evm.encoding import parse_quantity
@@ -29,26 +28,16 @@ from multichain_indexer.adapters.evm.history import (
     HistorySource,
     SourceContext,
 )
+from multichain_indexer.adapters.evm.logs import logs_rpc
 from multichain_indexer.adapters.evm.profiles import LOCALNET
 from multichain_indexer.adapters.evm.transactions import TRANSFER_TOPIC
 from multichain_indexer.core.errors import ConfigError, InvalidInput, MalformedResponse
-from multichain_indexer.core.http import ApiClient, JsonObject
-from multichain_indexer.core.ratelimit import key_scope, shared_limiter
+from multichain_indexer.core.http import JsonObject
 
 BLOCKS_PER_PAGE = 25
 # About 2.5 hours of BNB Smart Chain testnet, about 67 minutes of requests at 5 a second.
 MAX_SCAN_BLOCKS = 20_000
 TOPIC_HEX_DIGITS = 64
-
-LOGS_KEY_SETTING = "NODEREAL_API_KEY"
-LOGS_KEY_URL = "https://dashboard.nodereal.io"
-# The free plan allows 150 compute units a second per key and eth_getLogs costs 50.
-LOGS_REQUESTS_PER_SECOND = 2.0
-# Networks whose own public endpoints refuse eth_getLogs, and the server to ask instead; the
-# key follows "/v1/".
-LOGS_SERVERS: Mapping[tuple[str, str], str] = {
-    ("bnb", "testnet"): "https://bsc-testnet.nodereal.io",
-}
 
 
 class _Position(NamedTuple):
@@ -165,26 +154,13 @@ def _guard_message(context: SourceContext) -> str:
 
 
 def _logs_rpc(context: SourceContext) -> EvmRpc:
-    server = LOGS_SERVERS.get((context.chain.name, context.network))
-    if server is None:
-        return context.rpc
-    key = context.settings.env.get(LOGS_KEY_SETTING)
-    if key is None:
-        raise ConfigError(
-            f"token transfers on {context.chain.networks[context.network].title} come from "
-            f"NodeReal's eth_getLogs, which needs a free API key: create one at {LOGS_KEY_URL} "
-            f"and set {LOGS_KEY_SETTING}, or set {_setting(context, 'HISTORY_SCOPE')} to direct"
+    try:
+        return logs_rpc(
+            context.chain, context.network, context.settings, context.rpc, "token transfers"
         )
-    configured = context.settings.endpoint(
-        context.chain.name, context.network, "LOGS_SERVER", server
-    ).get_secret_value()
-    client = ApiClient(
-        SecretStr(f"{configured}/v1/{key.get_secret_value()}"),
-        timeout=context.settings.request_timeout,
-        max_retries=context.settings.max_retries,
-        limiter=shared_limiter(key_scope(LOGS_KEY_SETTING, key), LOGS_REQUESTS_PER_SECOND),
-    )
-    return EvmRpc(client)
+    except ConfigError as missing:
+        scope = _setting(context, "HISTORY_SCOPE")
+        raise ConfigError(f"{missing}, or set {scope} to direct") from None
 
 
 def _setting(context: SourceContext, name: str) -> str:

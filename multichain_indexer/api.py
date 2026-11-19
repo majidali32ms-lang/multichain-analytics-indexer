@@ -44,7 +44,7 @@ from multichain_indexer.follow import (
 if TYPE_CHECKING:
     # Only for annotations: the EVM adapter is loaded when an EVM chain is used, so the API
     # imports without it.
-    from multichain_indexer.adapters.evm.models import EvmFinality
+    from multichain_indexer.adapters.evm.models import EvmFinality, EvmTokenHolders
 
 DEFAULT_TRANSACTION_LIMIT = 20
 _T = TypeVar("_T")
@@ -63,6 +63,15 @@ class _FinalityLookup(Protocol):
     """An adapter that reports how far its finalized block trails the newest one."""
 
     async def fetch_finality(self) -> EvmFinality: ...
+
+
+@runtime_checkable
+class _HolderReport(Protocol):
+    """An adapter that reports a token's holders over a block range from its logs."""
+
+    async def fetch_token_holders(
+        self, token: str, *, from_block: int, to_block: int | None, nodereal_count: bool
+    ) -> EvmTokenHolders: ...
 
 
 class AsyncIndexer:
@@ -147,6 +156,28 @@ class AsyncIndexer:
         if not isinstance(self._indexer, _FinalityLookup):
             raise UnsupportedChain(f"{self.profile.name} has no finality readout; EVM chains do")
         return await self._indexer.fetch_finality()
+
+    async def token_holders(
+        self,
+        token: str,
+        *,
+        from_block: int,
+        to_block: int | None = None,
+        nodereal_count: bool = False,
+    ) -> EvmTokenHolders:
+        """Report an ERC-20 or BEP-20 token's holders over a block range. Nothing is stored.
+
+        Only addresses that moved the token in the range are counted; ``to_block`` defaults to
+        the newest finalized block. ``nodereal_count`` adds NodeReal's own full-chain count.
+
+        Raises:
+            UnsupportedChain: The chain is not an EVM chain.
+        """
+        if not isinstance(self._indexer, _HolderReport):
+            raise UnsupportedChain(f"{self.profile.name} has no token holder report; EVM chains do")
+        return await self._indexer.fetch_token_holders(
+            token, from_block=from_block, to_block=to_block, nodereal_count=nodereal_count
+        )
 
     async def asset(self, asset_id: str | int) -> AssetRecord:
         """Fetch a token or asset, such as an Algorand ASA, and store it."""
@@ -323,6 +354,21 @@ class Indexer:
     def finality(self) -> EvmFinality:
         """See ``AsyncIndexer.finality``."""
         return self._thread.run(self._inner.finality())
+
+    def token_holders(
+        self,
+        token: str,
+        *,
+        from_block: int,
+        to_block: int | None = None,
+        nodereal_count: bool = False,
+    ) -> EvmTokenHolders:
+        """See ``AsyncIndexer.token_holders``."""
+        return self._thread.run(
+            self._inner.token_holders(
+                token, from_block=from_block, to_block=to_block, nodereal_count=nodereal_count
+            )
+        )
 
     def asset(self, asset_id: str | int) -> AssetRecord:
         """See ``AsyncIndexer.asset``."""

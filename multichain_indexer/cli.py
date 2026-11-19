@@ -10,7 +10,7 @@ import sys
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Concatenate, ParamSpec, TextIO, TypeVar
+from typing import TYPE_CHECKING, Concatenate, ParamSpec, TextIO, TypeVar
 
 import click
 
@@ -26,6 +26,9 @@ from multichain_indexer.db import Database, chosen_database, database_secrets, i
 from multichain_indexer.follow import FollowSummary, default_interval
 from multichain_indexer.pq import PQ_STATUS
 from multichain_indexer.report import REPORT_FORMATS, metrics_table, write_report
+
+if TYPE_CHECKING:
+    from multichain_indexer.adapters.evm.models import EvmTokenHolders
 
 if sys.platform == "win32":
     import ctypes
@@ -261,6 +264,49 @@ def index_finality(indexer: Indexer) -> None:
     if finality.finalized_above_head:
         fields["Note"] = "the endpoint reported a finalized block above its newest block"
     _echo_fields(fields)
+
+
+@index.command("holders")
+@click.argument("token")
+@click.option("--from-block", type=click.IntRange(min=0), required=True, help="First block.")
+@click.option(
+    "--to-block",
+    type=click.IntRange(min=0),
+    help="Last block; defaults to the newest finalized block.",
+)
+@click.option(
+    "--nodereal-count",
+    is_flag=True,
+    help="Add NodeReal's own full-chain holder count (free key, 50 compute units).",
+)
+@click.option("--json", "as_json", is_flag=True, help="Print the report as JSON.")
+@click.pass_obj
+@_with_indexer
+def index_holders(
+    indexer: Indexer,
+    token: str,
+    from_block: int,
+    to_block: int | None,
+    nodereal_count: bool,
+    as_json: bool,
+) -> None:
+    """Show an ERC-20 or BEP-20 token's holders, transfers and top-ten share over a block
+    range, from its Transfer logs; only addresses that moved the token in the range count."""
+    _require_chain(indexer, EVM_CHAINS, "index holders")
+    report = indexer.token_holders(
+        token, from_block=from_block, to_block=to_block, nodereal_count=nodereal_count
+    )
+    if as_json:
+        click.echo(report.model_dump_json(indent=2))
+        return
+    _echo_fields(_holder_fields(report))
+    click.echo()
+    click.echo("Largest balances at the last block (base units, share of total supply):")
+    for holder in report.top_holders:
+        click.echo(f"  {holder.address}  {holder.balance}  {_percent(holder.share_of_supply)}")
+    click.echo("Transfers per day (UTC):")
+    for day, count in report.transfers_per_day.items():
+        click.echo(f"  {day}  {count}")
 
 
 @index.command("asset")
@@ -626,6 +672,33 @@ def _require_chain(indexer: Indexer, chains: str | tuple[str, ...], command: str
     allowed = (chains,) if isinstance(chains, str) else chains
     if indexer.profile.name not in allowed:
         raise InvalidInput(f"{command} is for {', '.join(allowed)}, not {indexer.profile.name}")
+
+
+def _holder_fields(report: EvmTokenHolders) -> dict[str, str]:
+    fields = {
+        "Token": f"{report.token} ({report.standard})",
+        "Blocks": f"{report.from_block} to {report.to_block}",
+        "Time covered": f"{_milliseconds(report.from_time)} to {_milliseconds(report.to_time)}",
+        "Transfers": str(report.transfers),
+        "Addresses active": str(report.active_addresses),
+        "Holders at the end": f"{report.holders_at_end} of the addresses active in the range",
+        "New holders": str(report.new_holders),
+        "Holders that left": str(report.exited_holders),
+        "Total supply": f"{report.total_supply} base units",
+        "Top-ten share": f"{_percent(report.top_share_of_supply)} of total supply (at least)",
+    }
+    if report.inconsistent_addresses:
+        fields["Balances not matching transfers"] = str(report.inconsistent_addresses)
+    if report.nodereal_compute_units is not None:
+        counted = "none" if report.nodereal_holder_count is None else report.nodereal_holder_count
+        fields["Holders, whole chain"] = (
+            f"{counted} according to NodeReal ({report.nodereal_compute_units} compute units)"
+        )
+    return fields
+
+
+def _percent(share: float | None) -> str:
+    return "unknown" if share is None else f"{share:.2%}"
 
 
 def _count(number: int, noun: str) -> str:

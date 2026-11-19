@@ -111,7 +111,7 @@ def _native(transaction: JsonObject, receipt: JsonObject, block: JsonObject) -> 
         created_contract=_optional_address(receipt, "contractAddress"),
         log_count=len(logs),
         token_transfers=tuple(
-            transfer for transfer in (_token_transfer(log) for log in logs) if transfer
+            transfer for transfer in (token_transfer(log) for log in logs) if transfer
         ),
         blob=_blob_gas(transaction, receipt),
         l1_data=_l1_data_fee(receipt),
@@ -194,7 +194,7 @@ def _logs(receipt: JsonObject) -> list[JsonObject]:
     return [log for log in logs if isinstance(log, dict)]
 
 
-def _token_transfer(log: JsonObject) -> EvmTokenTransfer | None:
+def token_transfer(log: JsonObject) -> EvmTokenTransfer | None:
     topics = log.get("topics")
     if not isinstance(topics, list) or len(topics) not in (FUNGIBLE_TOPICS, NFT_TOPICS):
         return None
