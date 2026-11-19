@@ -137,12 +137,13 @@ BNB = EvmChain(
     economic_finality=True,
     networks={
         # Blockscout has no BNB Smart Chain explorer, and Etherscan serves it on paid plans only.
-        # NodeReal's free plan lists transfers on mainnet; nothing free lists testnet history.
+        # NodeReal's free plan lists transfers on mainnet; nothing free lists testnet history,
+        # so testnet reads blocks, a short range at a time (see scan.py).
         MAINNET: EvmNetwork(
             "BNB Smart Chain mainnet", 56, "https://bsc-dataseed.bnbchain.org", NODEREAL
         ),
         TESTNET: EvmNetwork(
-            "BNB Smart Chain testnet", 97, "https://bsc-testnet-dataseed.bnbchain.org", None
+            "BNB Smart Chain testnet", 97, "https://bsc-testnet-dataseed.bnbchain.org", RPC_SCAN
         ),
     },
 )

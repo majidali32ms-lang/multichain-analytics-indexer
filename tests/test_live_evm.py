@@ -8,6 +8,7 @@ skipped and say which key is missing.
 from __future__ import annotations
 
 import asyncio
+import json
 import runpy
 import sys
 from pathlib import Path
@@ -32,6 +33,7 @@ SEPOLIA_ACCOUNT = "0xAA37651031A4b641962550415dB2C43E8d962232"
 # A small BNB Smart Chain mainnet sender, two transactions in its newest million blocks.
 BSC_ACCOUNT = "0x5664a59eee2ab649c218da75c47805935c4a20cb"
 EXAMPLES = Path(__file__).parent.parent / "examples" / "evm"
+FIXTURES = Path(__file__).parent / "fixtures" / "evm"
 
 
 def require_key(name: str) -> None:
@@ -81,6 +83,56 @@ async def test_bnb_testnet_reads_a_recent_transaction_by_hash() -> None:
     assert record.id == tx_hash
     assert record.chain == "bnb"
     assert record.native.block_number <= head
+
+
+async def test_bnb_testnet_history_from_a_short_block_scan() -> None:
+    adapter = create_indexer("bnb", None, Settings())
+    assert isinstance(adapter, EvmIndexer)
+    try:
+        head = await adapter.chain_head()
+        sent = (await adapter._rpc.block_transactions(await _busy_block(adapter, head - 5)))[0]
+        block = int(str(sent["blockNumber"]), 16)
+        hashes = [
+            record.id
+            async for page in adapter.iter_account_transactions(
+                str(sent["from"]), from_height=block, to_height=block
+            )
+            for record in page.records
+        ]
+    finally:
+        await adapter.aclose()
+    assert sent["hash"] in hashes
+
+
+# The fixture's BEP-20 receiver is named only in the token's Transfer log, so only the "all"
+# scope lists the transaction for it.
+async def test_bnb_testnet_all_scope_reads_token_transfers_from_nodereal() -> None:
+    require_key("NODEREAL_API_KEY")
+    saved = json.loads((FIXTURES / "tx_bsc_testnet_erc20.json").read_text("utf-8"))
+    (log,) = saved["receipt"]["logs"]
+    block = int(saved["receipt"]["blockNumber"], 16)
+    settings = Settings.from_env()
+    env = {**settings.env, "BNB_TESTNET_HISTORY_SCOPE": SecretStr("all")}
+    adapter = create_indexer("bnb", None, settings.model_copy(update={"env": env}))
+    try:
+        hashes = [
+            record.id
+            async for page in adapter.iter_account_transactions(
+                "0x" + log["topics"][2][-40:], from_height=block, to_height=block
+            )
+            for record in page.records
+        ]
+    finally:
+        await adapter.aclose()
+    assert hashes == [saved["transaction"]["hash"]]
+
+
+async def _busy_block(adapter: EvmIndexer, start: int) -> int:
+    for number in range(start, start - 20, -1):
+        if await adapter._rpc.block_transactions(number):
+            return number
+        await asyncio.sleep(0.5)
+    pytest.fail("no transaction in 20 recent BNB Smart Chain testnet blocks")
 
 
 async def _first_transaction_hash(adapter: EvmIndexer, start: int) -> str:

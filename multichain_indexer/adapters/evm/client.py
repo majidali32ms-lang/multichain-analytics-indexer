@@ -100,6 +100,22 @@ class EvmRpc:
             raise MalformedResponse("eth_getBlockByNumber: expected a list of transactions")
         return [transaction for transaction in transactions if isinstance(transaction, dict)]
 
+    async def logs(
+        self, from_block: int, to_block: int, topics: list[JsonValue], address: str | None = None
+    ) -> list[JsonObject]:
+        """Return the logs in a block range that match ``topics`` (and ``address``)."""
+        log_filter: JsonObject = {
+            "fromBlock": hex(from_block),
+            "toBlock": hex(to_block),
+            "topics": topics,
+        }
+        if address is not None:
+            log_filter["address"] = address
+        found = await self._call("eth_getLogs", [log_filter])
+        if not isinstance(found, list) or not all(isinstance(log, dict) for log in found):
+            raise MalformedResponse("eth_getLogs: expected a list of logs")
+        return [log for log in found if isinstance(log, dict)]
+
     async def transaction(self, tx_hash: str) -> JsonObject | None:
         """Return a transaction, or None when the node does not know it."""
         return await self._object_or_none("eth_getTransactionByHash", tx_hash)

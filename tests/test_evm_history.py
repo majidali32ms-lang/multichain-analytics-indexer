@@ -4,6 +4,7 @@ import copy
 import json
 import logging
 from collections.abc import AsyncIterator, Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -423,15 +424,12 @@ def test_explorers_do_not_serve_local_networks() -> None:
         adapter._history_source()
 
 
-@pytest.mark.parametrize(
-    ("chain", "network", "title"),
-    [
-        (BNB, "testnet", "BNB Smart Chain testnet"),
-    ],
-)
 async def test_networks_without_a_free_history_service_say_so(
-    node: FakeNode, tmp_path: Path, chain: EvmChain, network: str, title: str
+    node: FakeNode, tmp_path: Path
 ) -> None:
+    testnet = replace(BNB.networks["testnet"], history_source=None)
+    chain = replace(BNB, networks={**BNB.networks, "testnet": testnet})
+    network, title = "testnet", "BNB Smart Chain testnet"
     node.routes["rpc:eth_chainId"] = rpc_ok(hex(chain.networks[network].chain_id))
     adapter = adapter_for(explorer_settings(node, tmp_path, chain, network), chain, network)
     try:
@@ -955,11 +953,4 @@ def test_unknown_scope_is_refused() -> None:
     with pytest.raises(
         ConfigError, match="ETHEREUM_TESTNET_HISTORY_SCOPE must be one of: direct, all"
     ):
-        adapter._history_source()
-
-
-def test_block_scan_lists_direct_transactions_only() -> None:
-    env = {"ETHEREUM_LOCALNET_HISTORY_SCOPE": SecretStr("all")}
-    adapter = indexer_factory(ETHEREUM)("localnet", Settings(env=env), None)
-    with pytest.raises(ConfigError, match="rpc-scan lists direct transactions only"):
         adapter._history_source()
