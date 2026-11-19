@@ -37,11 +37,14 @@ class EvmContract(NativeData):
 class EvmToken(NativeData):
     """A fungible token contract, read at ``block_number``. ``standard`` is the chain's name
     for it, ERC-20 or BEP-20; ``decimals_declared`` is false when the contract has no
-    ``decimals()``, and its amounts are then whole units."""
+    ``decimals()``, and its amounts are then whole units. ``cas20_variant`` is set for a BNB
+    Smart Chain CAS20 token (BEP-702), a token the chain runs natively: ``asset``,
+    ``stablecoin`` or ``variant N``."""
 
     standard: str
     decimals_declared: bool
     block_number: int = Field(ge=0)
+    cas20_variant: str | None = None
 
 
 class EvmTokenTransfer(NativeData):

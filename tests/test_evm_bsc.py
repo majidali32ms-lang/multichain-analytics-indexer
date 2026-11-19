@@ -18,6 +18,7 @@ from multichain_indexer.adapters.evm.bsc import (
     SYSTEM_CONTRACTS,
     SYSTEM_TRANSACTION_TARGETS,
     bnb_labels,
+    cas20_variant,
     read_validators,
     system_contract_name,
 )
@@ -248,3 +249,53 @@ def test_cli_lists_validators_with_their_names(node: FakeNode, tmp_path: Path) -
     )
     assert nameless.exit_code == 1
     assert "index validators is for bnb, not opbnb" in nameless.output
+
+
+CAS20 = json.loads((FIXTURES / "cas20_token_bsc_testnet.json").read_text("utf-8"))
+
+
+@pytest.mark.parametrize(
+    ("address", "code", "variant"),
+    [
+        ("0xca52000000000000000000805c65560851843659", b"\xef", "asset"),
+        ("0xca52000000000000000001a96a592e8b818886d1", b"\xef", "stablecoin"),
+        ("0xca52000000000000000002a96a592e8b818886d1", b"\xef", "variant 2"),
+        ("0xca52000000000000000001a96a592e8b818886d1", b"", None),
+        ("0xca52000000000000000001a96a592e8b818886d1", b"\xef\x00", None),
+        ("0x0000000000000000000000000000000000001000", b"\xef", None),
+    ],
+)
+def test_cas20_tokens_are_known_by_address_and_sentinel(
+    address: str, code: bytes, variant: str | None
+) -> None:
+    assert cas20_variant(address, code) == variant
+
+
+async def test_a_real_cas20_token_is_read_and_labelled(node: FakeNode, tmp_path: Path) -> None:
+    replies = {(e["method"], json.dumps(e["params"])): e["reply"] for e in CAS20["exchanges"]}
+    for method, _ in replies:
+        node.handlers[f"rpc:{method}"] = (
+            lambda m: lambda params: Reply(replies[(m, json.dumps(params))])
+        )(method)
+    token = "0xca52000000000000000001a96a592e8b818886d1"
+    async with AsyncIndexer("bnb", settings=validator_settings(node, tmp_path)) as indexer:
+        record = await indexer.asset(token)
+        fields = indexer.describe(record)
+    assert (record.name, record.unit, record.decimals) == ("48club Chapel Test", "T48", 6)
+    assert fields["Standard"] == "BEP-20 (CAS20 stablecoin, BEP-702)"
+
+
+def test_index_token_on_an_address_without_bytecode_is_a_clear_error(
+    node: FakeNode, tmp_path: Path
+) -> None:
+    node.routes["rpc:eth_chainId"] = Reply({"jsonrpc": "2.0", "id": 1, "result": "0x61"})
+    node.routes["rpc:eth_blockNumber"] = Reply({"jsonrpc": "2.0", "id": 1, "result": "0x10"})
+    node.routes["rpc:eth_getCode"] = Reply({"jsonrpc": "2.0", "id": 1, "result": "0x"})
+    env = {"BNB_TESTNET_RPC_SERVER": node.url, "MCI_MAX_RETRIES": "0"}
+    dead = "0x000000000000000000000000000000000000dEaD"
+    options = ["--chain", "bnb", "--db", str(tmp_path / "t.db"), "--env-file", str(tmp_path / "n")]
+    result = CliRunner(env=env).invoke(cli, [*options, "index", "token", dead])
+    assert result.exit_code == 1
+    assert result.output == (
+        f"Error: no contract is deployed at {dead} on BNB Smart Chain testnet\n"
+    )

@@ -50,12 +50,31 @@ STAKE_HUB = "0x0000000000000000000000000000000000002002"
 CONSENSUS_TO_OPERATOR = "consensusToOperator(address)"
 DESCRIPTION = "getValidatorDescription(address)"
 WORD_BYTES = 32
+# BEP-702 (Jenner hard fork): CAS20 tokens, run natively at reserved addresses.
+CAS20_PREFIX = bytes.fromhex("ca52") + bytes(8)
+CAS20_PREFIX_BYTES = len(CAS20_PREFIX)
+CAS20_SENTINEL = bytes.fromhex("ef")
+CAS20_VARIANTS = {0: "asset", 1: "stablecoin"}
 # Parlia's systemContracts map leaves out TokenManager, Staking and StakeCredit.
 SYSTEM_TRANSACTION_TARGETS = frozenset(SYSTEM_CONTRACTS) - {
     "0x0000000000000000000000000000000000001008",
     "0x0000000000000000000000000000000000002001",
     "0x0000000000000000000000000000000000002003",
 }
+
+
+def cas20_variant(address: str, code: bytes) -> str | None:
+    """Return a CAS20 token's variant, or None when ``address`` holds no CAS20 token.
+
+    BEP-702: a token's address is ``0xCA52``, eight zero bytes, the variant byte (0 asset,
+    1 stablecoin) and a nine-byte fingerprint; an initialized token's code is the one-byte
+    sentinel ``0xEF``.
+    """
+    raw = bytes.fromhex(address.removeprefix("0x"))
+    if raw[:CAS20_PREFIX_BYTES] != CAS20_PREFIX or code != CAS20_SENTINEL:
+        return None
+    variant = raw[CAS20_PREFIX_BYTES]
+    return CAS20_VARIANTS.get(variant, f"variant {variant}")
 
 
 def system_contract_name(address: str | None) -> str | None:

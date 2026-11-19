@@ -16,7 +16,7 @@ from typing import ClassVar, cast
 from pydantic import JsonValue
 
 from multichain_indexer.adapters.evm.alchemy import create_alchemy_history
-from multichain_indexer.adapters.evm.bsc import read_validators
+from multichain_indexer.adapters.evm.bsc import cas20_variant, read_validators
 from multichain_indexer.adapters.evm.client import EvmRpc
 from multichain_indexer.adapters.evm.encoding import parse_quantity
 from multichain_indexer.adapters.evm.explorer import (
@@ -177,19 +177,27 @@ class EvmIndexer(BaseIndexer):
         address = self.validate_address(asset_id)
         await self._require_chain()
         block = await self._rpc.block_number()
-        if not is_contract_code(await self._rpc.code(address, block)):
+        code = await self._rpc.code(address, block)
+        if not is_contract_code(code):
             raise NotFound(f"no contract is deployed at {address} on {self._network_title()}")
 
         async def call(data: bytes) -> bytes | None:
             return await self._rpc.call(address, data, block)
 
-        return await read_token(
+        record = await read_token(
             call,
             address=address,
             block_number=block,
             standard=self.chain.token_standard,
             chain=self.chain.name,
             network=self.network,
+        )
+        if self.chain.name != BNB_CHAIN_NAME:
+            return record
+        native = cast(EvmToken, record.native)
+        variant = cas20_variant(address, code)
+        return record.model_copy(
+            update={"native": native.model_copy(update={"cas20_variant": variant})}
         )
 
     async def fetch_token_holders(
@@ -723,9 +731,12 @@ def _block_number(receipt: dict[str, JsonValue]) -> int:
 def _describe_token(record: AssetRecord) -> dict[str, str]:
     native = cast(EvmToken, record.native)
     decimals = str(record.decimals) if native.decimals_declared else "not declared, so 0"
+    standard = native.standard
+    if native.cas20_variant:
+        standard = f"{standard} (CAS20 {native.cas20_variant}, BEP-702)"
     return {
         "Token": record.id,
-        "Standard": native.standard,
+        "Standard": standard,
         "Name": record.name or "not declared",
         "Symbol": record.unit or "not declared",
         "Decimals": decimals,

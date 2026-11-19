@@ -398,3 +398,28 @@ def test_public_key_exposure_on_bnb_mainnet() -> None:
         "contract account (no private key)",
     ]
     assert report.revealed_share == 0.5
+
+
+# A CAS20 (BEP-702) stablecoin on BNB Smart Chain testnet, created in block 141,677,813 after the
+# Jenner hard fork reached testnet; 102 transfers in its first 50,000 blocks (read 2026-11-19).
+CAS20_TOKEN = "0xca52000000000000000001a96a592e8b818886d1"
+CAS20_CREATED = 141_677_813
+
+
+def test_cas20_token_on_bnb_testnet() -> None:
+    with Indexer("bnb", settings=Settings()) as indexer:
+        record = indexer.asset(CAS20_TOKEN)
+        standard = indexer.describe(record)["Standard"]
+    assert record.decimals == 6
+    assert standard == "BEP-20 (CAS20 stablecoin, BEP-702)"
+
+
+def test_cas20_holder_report_from_its_creation() -> None:
+    require_key("NODEREAL_API_KEY")
+    with Indexer("bnb", settings=Settings.from_env()) as indexer:
+        report = indexer.token_holders(
+            CAS20_TOKEN, from_block=CAS20_CREATED, to_block=CAS20_CREATED + 49_999
+        )
+    assert report.transfers == 102
+    assert report.new_holders == report.active_addresses
+    assert report.inconsistent_addresses == 0
