@@ -32,7 +32,7 @@ class ChainPqStatus:
 CHECKED_ON = "2026-11-08"
 EVM_CHECKED_ON = "2026-11-09"
 BITCOIN_CHECKED_ON = "2026-11-13"
-BNB_CHECKED_ON = "2026-11-16"
+BNB_CHECKED_ON = "2026-11-19"
 
 PQ_STATUS: tuple[ChainPqStatus, ...] = (
     ChainPqStatus(
@@ -175,11 +175,14 @@ PQ_STATUS: tuple[ChainPqStatus, ...] = (
         since="",
         detected=False,
         note=(
-            "Research only: a migration report (2026-05-14) benchmarked ML-DSA-44 transaction "
-            "signatures; its proof of concept was not merged, and no BEP enables them."
+            "Research and tests only: the BSC Post-Quantum Cryptography Migration Report "
+            "(2026-05-14) tested ML-DSA-44 transaction signatures and pqSTARK vote aggregation; "
+            "the BNB Chain H2 2026 Tech Roadmap (2026-07-08) says testing continues. The proof "
+            "of concept (bnb-chain/bsc#3660) was closed unmerged, and no post-quantum BEP is "
+            "merged; seven proposals are open."
         ),
         source="https://www.bnbchain.org/en/blog/bsc-post-quantum-cryptography-migration-report",
-        checked_on=EVM_CHECKED_ON,
+        checked_on=BNB_CHECKED_ON,
     ),
     ChainPqStatus(
         chain="opbnb",
