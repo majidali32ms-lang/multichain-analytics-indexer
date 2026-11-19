@@ -15,7 +15,7 @@ import threading
 from collections.abc import Callable, Coroutine
 from pathlib import Path
 from types import TracebackType
-from typing import Protocol, Self, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, Self, TypeVar, runtime_checkable
 
 import multichain_indexer.adapters  # noqa: F401  (registers the built-in chains)
 from multichain_indexer.core.base_indexer import ChainProfile
@@ -41,6 +41,11 @@ from multichain_indexer.follow import (
     follow_account,
 )
 
+if TYPE_CHECKING:
+    # Only for annotations: the EVM adapter is loaded when an EVM chain is used, so the API
+    # imports without it.
+    from multichain_indexer.adapters.evm.models import EvmFinality
+
 DEFAULT_TRANSACTION_LIMIT = 20
 _T = TypeVar("_T")
 Describable = TransactionRecord | AccountRecord | AssetRecord | ContractRecord
@@ -51,6 +56,13 @@ class _TransactionLookup(Protocol):
     """An adapter that can read one transaction by its ID."""
 
     async def fetch_transaction(self, transaction_id: str, /) -> TransactionRecord: ...
+
+
+@runtime_checkable
+class _FinalityLookup(Protocol):
+    """An adapter that reports how far its finalized block trails the newest one."""
+
+    async def fetch_finality(self) -> EvmFinality: ...
 
 
 class AsyncIndexer:
@@ -125,6 +137,16 @@ class AsyncIndexer:
                 f"{self.profile.name} cannot look up a single transaction by its ID"
             )
         return await self._indexer.fetch_transaction(transaction_id)
+
+    async def finality(self) -> EvmFinality:
+        """Read how far the finalized block trails the newest block now. Nothing is stored.
+
+        Raises:
+            UnsupportedChain: The chain is not an EVM chain.
+        """
+        if not isinstance(self._indexer, _FinalityLookup):
+            raise UnsupportedChain(f"{self.profile.name} has no finality readout; EVM chains do")
+        return await self._indexer.fetch_finality()
 
     async def asset(self, asset_id: str | int) -> AssetRecord:
         """Fetch a token or asset, such as an Algorand ASA, and store it."""
@@ -297,6 +319,10 @@ class Indexer:
     def transaction(self, transaction_id: str) -> TransactionRecord:
         """See ``AsyncIndexer.transaction``."""
         return self._thread.run(self._inner.transaction(transaction_id))
+
+    def finality(self) -> EvmFinality:
+        """See ``AsyncIndexer.finality``."""
+        return self._thread.run(self._inner.finality())
 
     def asset(self, asset_id: str | int) -> AssetRecord:
         """See ``AsyncIndexer.asset``."""

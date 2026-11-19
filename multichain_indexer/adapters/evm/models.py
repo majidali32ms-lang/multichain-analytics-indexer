@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import Field
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from multichain_indexer.core.models import NativeData
 
@@ -116,3 +118,29 @@ class EvmTransaction(NativeData):
     l1_data: EvmL1DataFee | None = None
     arbitrum: EvmArbitrumGas | None = None
     history_source: str | None = None
+
+
+class EvmFinality(BaseModel):
+    """How far an EVM network's finalized block trails its newest block, as one endpoint saw it.
+
+    ``source`` names where the finalized block came from: ``eth_getFinalizedHeader`` (BNB Smart
+    Chain's Economic Finality API) or the ``finalized`` block tag. The finalized block is read
+    first and the newest block after it, so the lag is an upper bound. An endpoint behind a load
+    balancer can report a finalized block above the newest one; it is then shown at the newest
+    block and ``finalized_above_head`` says so. Times come from the headers' ``milliTimestamp``
+    where the chain has one, else from whole seconds.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    chain: str
+    network: str
+    source: str
+    head_block: int = Field(ge=0)
+    head_time: datetime
+    finalized_block: int = Field(ge=0)
+    finalized_time: datetime
+    lag_blocks: int = Field(ge=0)
+    lag_milliseconds: int = Field(ge=0)
+    finalized_above_head: bool
+    observed_at: datetime

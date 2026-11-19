@@ -76,6 +76,8 @@ def serve_weth(node: FakeNode) -> None:
     for method, reply in WETH["replies"].items():
         node.routes[f"rpc:{method}"] = Reply(reply)
     node.routes["rpc:eth_getBlockByNumber"] = finalized_block()
+    # As Anvil and Ethereum clients answer it; BNB Smart Chain then uses the finalized tag.
+    node.routes["rpc:eth_getFinalizedHeader"] = rpc_error(-32601, "method not found")
 
 
 def serve_eoa(node: FakeNode, code: str = "0x") -> None:

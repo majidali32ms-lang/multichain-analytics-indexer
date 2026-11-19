@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncIterator, Sequence
+from datetime import UTC, datetime
 from typing import ClassVar, cast
 
 from pydantic import JsonValue
@@ -32,6 +33,7 @@ from multichain_indexer.adapters.evm.metrics import evm_metrics
 from multichain_indexer.adapters.evm.models import (
     EvmAccount,
     EvmContract,
+    EvmFinality,
     EvmToken,
     EvmTransaction,
 )
@@ -63,7 +65,7 @@ from multichain_indexer.core.errors import (
     UnsupportedChain,
     WrongNetwork,
 )
-from multichain_indexer.core.http import ApiClient, ResponseStore
+from multichain_indexer.core.http import ApiClient, JsonObject, ResponseStore
 from multichain_indexer.core.models import (
     AccountRecord,
     AssetRecord,
@@ -81,6 +83,12 @@ WEI_DECIMALS = 18
 # MCI_REQUESTS_PER_SECOND overrides it.
 DEFAULT_RPC_REQUESTS_PER_SECOND = 5.0
 HASH_HEX_DIGITS = 64
+MILLISECONDS_PER_SECOND = 1000
+# eth_getFinalizedHeader's -2: the highest block at least two thirds of the validators have
+# built on, or the fast-finalized block if that is higher (docs.bnbchain.org, bsc-api-list).
+TWO_THIRDS_OF_VALIDATORS = -2
+ECONOMIC_FINALITY_SOURCE = "eth_getFinalizedHeader"
+FINALIZED_TAG_SOURCE = "finalized tag"
 HEX_CHARACTERS = frozenset("0123456789abcdefABCDEF")
 
 HISTORY_SOURCES: dict[str, HistorySourceFactory] = {
@@ -196,6 +204,33 @@ class EvmIndexer(BaseIndexer):
         await self._require_chain()
         await self._refresh_finalized_height()
         return await self._rpc.block_number()
+
+    async def fetch_finality(self) -> EvmFinality:
+        """Return how far the finalized block trails the newest block, read now.
+
+        BNB Smart Chain asks ``eth_getFinalizedHeader`` first and falls back to the
+        ``finalized`` tag when the endpoint does not serve it; other chains use the tag.
+        """
+        await self._require_chain()
+        finalized, source = await self._finalized_header()
+        head = await self._rpc.latest_header()
+        head_block = _header_number(head)
+        reported = _header_number(finalized)
+        shown = finalized if reported <= head_block else head
+        head_ms, finalized_ms = _header_milliseconds(head), _header_milliseconds(shown)
+        return EvmFinality(
+            chain=self.chain.name,
+            network=self.network,
+            source=source,
+            head_block=head_block,
+            head_time=_time_of(head_ms),
+            finalized_block=min(reported, head_block),
+            finalized_time=_time_of(finalized_ms),
+            lag_blocks=max(head_block - reported, 0),
+            lag_milliseconds=max(head_ms - finalized_ms, 0),
+            finalized_above_head=reported > head_block,
+            observed_at=datetime.now(UTC),
+        )
 
     def final_height(self, head: int) -> int:
         # Blocks up to the endpoint's "finalized" block can no longer be replaced, and a
@@ -329,7 +364,16 @@ class EvmIndexer(BaseIndexer):
         return self.chain.networks[self.network].history_source
 
     async def _refresh_finalized_height(self) -> None:
-        self._finalized_height = await self._rpc.finalized_block_number()
+        header, _ = await self._finalized_header()
+        self._finalized_height = _header_number(header)
+
+    async def _finalized_header(self) -> tuple[JsonObject, str]:
+        if self.chain.economic_finality:
+            header = await self._rpc.economic_finalized_header(TWO_THIRDS_OF_VALIDATORS)
+            if header is not None:
+                return header, ECONOMIC_FINALITY_SOURCE
+            _log_no_economic_finality(self._network_title())
+        return await self._rpc.finalized_header(), FINALIZED_TAG_SOURCE
 
     async def _listed_record(self, tx_hash: str) -> TransactionRecord | None:
         record = await self._transaction_record(tx_hash, self._history_name)
@@ -461,6 +505,30 @@ def _log_missing(tx_hash: str) -> None:
     logger.warning(
         "history lists a transaction the RPC does not have yet", extra={"transaction": tx_hash}
     )
+
+
+def _log_no_economic_finality(network: str) -> None:
+    # A third-party endpoint may not serve BNB Smart Chain's own finality method, or may name no
+    # block; the standard tag still names a finalized block, without the probabilistic fallback.
+    logger.info(
+        "no block from eth_getFinalizedHeader; using the finalized tag",
+        extra={"network": network},
+    )
+
+
+def _header_number(header: JsonObject) -> int:
+    return parse_quantity(header.get("number"), "eth_getBlockByNumber")
+
+
+def _header_milliseconds(header: JsonObject) -> int:
+    if "milliTimestamp" in header:
+        return parse_quantity(header.get("milliTimestamp"), "eth_getBlockByNumber")
+    seconds = parse_quantity(header.get("timestamp"), "eth_getBlockByNumber")
+    return seconds * MILLISECONDS_PER_SECOND
+
+
+def _time_of(milliseconds: int) -> datetime:
+    return datetime.fromtimestamp(milliseconds / MILLISECONDS_PER_SECOND, tz=UTC)
 
 
 def _validate_hash(tx_hash: str) -> None:

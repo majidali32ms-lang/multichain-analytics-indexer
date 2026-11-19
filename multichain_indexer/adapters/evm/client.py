@@ -21,11 +21,14 @@ from multichain_indexer.core.http import ApiClient, JsonObject
 
 RPC_PATH = "/"
 
+METHOD_NOT_FOUND = -32601
 INVALID_PARAMS = -32602
 # eth_call reports a revert as error 3, with the revert data; some nodes use -32000.
 EXECUTION_REVERTED = 3
 SERVER_ERROR = -32000
 RATE_LIMITED = 429
+# Methods only some chains' nodes serve; the caller handles their absence.
+OPTIONAL_METHODS = frozenset({"eth_getFinalizedHeader"})
 
 
 class EvmRpc:
@@ -64,9 +67,29 @@ class EvmRpc:
             return None
         return parse_data(result, "eth_call")
 
-    async def finalized_block_number(self) -> int:
-        block = await self._block("finalized", full=False)
-        return parse_quantity(block.get("number"), "eth_getBlockByNumber")
+    async def finalized_header(self) -> JsonObject:
+        """Return the header of the block the endpoint's ``finalized`` tag names."""
+        return await self._block("finalized", full=False)
+
+    async def latest_header(self) -> JsonObject:
+        return await self._block("latest", full=False)
+
+    async def economic_finalized_header(self, verified_validators: int) -> JsonObject | None:
+        """Return BNB Smart Chain's ``eth_getFinalizedHeader`` for ``verified_validators``.
+
+        The node answers with the higher of the fast-finalized block and the highest block
+        that many validators have built on. None when the endpoint does not serve the method
+        or names no block, so the caller can use the ``finalized`` tag instead.
+        """
+        try:
+            header = await self._call("eth_getFinalizedHeader", [verified_validators])
+        except _MethodNotFound:
+            return None
+        if header is None:
+            return None
+        if not isinstance(header, dict):
+            raise MalformedResponse("eth_getFinalizedHeader: expected a block header")
+        return header
 
     async def block_header(self, number: int, *, immutable: bool) -> JsonObject:
         return await self._block(hex(number), full=False, immutable=immutable)
@@ -119,12 +142,18 @@ class _Reverted(Exception):
     """An eth_call that reverted; ``call`` turns it into None."""
 
 
+class _MethodNotFound(Exception):
+    """The endpoint does not serve a method that only some chains have."""
+
+
 def _error_for(method: str, error: JsonValue) -> Exception:
     code = error.get("code") if isinstance(error, dict) else None
     detail = error.get("message") if isinstance(error, dict) else error
     message = f"{method}: {detail}"
     if method == "eth_call" and _is_revert(code, detail):
         return _Reverted(message)
+    if method in OPTIONAL_METHODS and code == METHOD_NOT_FOUND:
+        return _MethodNotFound(message)
     if code == INVALID_PARAMS:
         return InvalidInput(message)
     if code == RATE_LIMITED:

@@ -1,0 +1,41 @@
+{
+  "network": "Sepolia",
+  "verified_validators": -2,
+  "replies": {
+    "eth_chainId": {
+      "jsonrpc": "2.0",
+      "result": "0xaa36a7",
+      "id": 1
+    },
+    "eth_getFinalizedHeader": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "error": {
+        "code": -32601,
+        "message": "the method eth_getFinalizedHeader does not exist/is not available"
+      }
+    },
+    "finalized": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "hash": "0x7b1ed3c8eef40b55537ff33341b470fd3589d08a3576778781bcbbf42007092e",
+        "number": "0xb9b13b",
+        "timestamp": "0x6aff21d4",
+        "miner": "0x4df6eb2ec570b58cc64f540247a8adfa11f1cf63",
+        "parentHash": "0xbdc030c067e3744932c97bd1f88cabf15028cf1dbaff9a9b31316453fee5e10e"
+      }
+    },
+    "latest": {
+      "jsonrpc": "2.0",
+      "result": {
+        "hash": "0xc5dfb98a8e0a4ab61082167903380f3e36fc73ffbc50a2542c1476f4704f7ff8",
+        "number": "0xb9b180",
+        "timestamp": "0x6aff2534",
+        "miner": "0x25941dc771bb64514fc8abbce970307fb9d477e9",
+        "parentHash": "0xbb9d254dd4cee74db83eebd17d487b3c1a0cfea88b78cd7c61110ae6c820893e"
+      },
+      "id": 1
+    }
+  }
+}

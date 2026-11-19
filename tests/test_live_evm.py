@@ -109,6 +109,24 @@ def test_polygon_amoy_history_from_etherscan() -> None:
     assert all(record.native.history_source == "etherscan" for record in head)
 
 
+@pytest.mark.parametrize(
+    ("chain", "network", "source"),
+    [
+        ("bnb", "mainnet", "eth_getFinalizedHeader"),
+        ("bnb", "testnet", "eth_getFinalizedHeader"),
+        ("opbnb", "mainnet", "finalized tag"),
+        ("opbnb", "testnet", "finalized tag"),
+    ],
+)
+def test_finality_readout(chain: str, network: str, source: str) -> None:
+    with Indexer(chain, network, settings=Settings()) as indexer:
+        finality = indexer.finality()
+    assert finality.source == source
+    assert finality.finalized_block <= finality.head_block
+    # Measured 2026-11-16: BNB Smart Chain mainnet 2-3 blocks, opBNB 92-128 blocks.
+    assert finality.lag_blocks < 1000
+
+
 def test_bnb_mainnet_history_from_nodereal() -> None:
     require_key("NODEREAL_API_KEY")
     with Indexer("bnb", "mainnet", settings=Settings.from_env()) as indexer:

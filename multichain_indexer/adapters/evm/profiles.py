@@ -43,11 +43,15 @@ class EvmNetwork:
 
 @dataclass(frozen=True)
 class EvmChain:
+    """``economic_finality`` marks a chain whose nodes serve ``eth_getFinalizedHeader``, BNB
+    Smart Chain's Economic Finality API; the others use the ``finalized`` block tag."""
+
     name: str
     title: str
     native_symbol: str
     token_standard: str
     networks: Mapping[str, EvmNetwork]
+    economic_finality: bool = False
 
     @property
     def network_names(self) -> tuple[str, ...]:
@@ -123,12 +127,14 @@ POLYGON = EvmChain(
     },
 )
 
-# docs.bnbchain.org/bnb-smart-chain/developers/json_rpc/json-rpc-endpoint
+# docs.bnbchain.org/bnb-smart-chain/developers/json_rpc/json-rpc-endpoint. Its finality API is
+# on the same site's bsc-api-list page.
 BNB = EvmChain(
     name="bnb",
     title="BNB Smart Chain",
     native_symbol="BNB",
     token_standard="BEP-20",
+    economic_finality=True,
     networks={
         # Blockscout has no BNB Smart Chain explorer, and Etherscan serves it on paid plans only.
         # NodeReal's free plan lists transfers on mainnet; nothing free lists testnet history.

@@ -313,7 +313,7 @@ async def test_checkpoint_never_passes_what_nodereal_indexed(
     node.handlers[METHOD] = lagging(TOP - 250)
     node.routes["rpc:eth_chainId"] = rpc_ok(hex(56))
     node.routes["rpc:eth_blockNumber"] = rpc_ok(hex(TOP))
-    node.routes["rpc:eth_getBlockByNumber"] = rpc_ok({"number": hex(TOP - 2)})
+    node.routes["rpc:eth_getFinalizedHeader"] = rpc_ok({"number": hex(TOP - 2)})
     adapter = indexer_factory(BNB)("mainnet", settings_for(node, tmp_path), None)
     try:
         head = await adapter.chain_head()

@@ -8,6 +8,7 @@ import json
 import os
 import sys
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 from typing import Concatenate, ParamSpec, TextIO, TypeVar
 
@@ -240,6 +241,26 @@ def index_tx(indexer: Indexer, txid: str) -> None:
             **indexer.describe(record),
         }
     )
+
+
+@index.command("finality")
+@click.pass_obj
+@_with_indexer
+def index_finality(indexer: Indexer) -> None:
+    """Show how far an EVM chain's finalized block trails its newest block, in blocks and
+    milliseconds; BNB Smart Chain uses its eth_getFinalizedHeader."""
+    _require_chain(indexer, EVM_CHAINS, "index finality")
+    finality = indexer.finality()
+    fields = {
+        "Newest block": f"{finality.head_block} ({_milliseconds(finality.head_time)})",
+        "Finalized block": f"{finality.finalized_block} ({_milliseconds(finality.finalized_time)})",
+        "Lag": f"{_count(finality.lag_blocks, 'block')}, {finality.lag_milliseconds} ms",
+        "Source": finality.source,
+        "Observed at": _milliseconds(finality.observed_at),
+    }
+    if finality.finalized_above_head:
+        fields["Note"] = "the endpoint reported a finalized block above its newest block"
+    _echo_fields(fields)
 
 
 @index.command("asset")
@@ -605,6 +626,14 @@ def _require_chain(indexer: Indexer, chains: str | tuple[str, ...], command: str
     allowed = (chains,) if isinstance(chains, str) else chains
     if indexer.profile.name not in allowed:
         raise InvalidInput(f"{command} is for {', '.join(allowed)}, not {indexer.profile.name}")
+
+
+def _count(number: int, noun: str) -> str:
+    return f"{number} {noun}" if number == 1 else f"{number} {noun}s"
+
+
+def _milliseconds(moment: datetime) -> str:
+    return moment.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3] + " UTC"
 
 
 def _echo_fields(fields: dict[str, str]) -> None:
