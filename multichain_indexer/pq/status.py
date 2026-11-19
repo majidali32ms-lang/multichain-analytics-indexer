@@ -32,6 +32,7 @@ class ChainPqStatus:
 CHECKED_ON = "2026-11-08"
 EVM_CHECKED_ON = "2026-11-09"
 BITCOIN_CHECKED_ON = "2026-11-13"
+BNB_CHECKED_ON = "2026-11-16"
 
 PQ_STATUS: tuple[ChainPqStatus, ...] = (
     ChainPqStatus(
@@ -179,6 +180,20 @@ PQ_STATUS: tuple[ChainPqStatus, ...] = (
         ),
         source="https://www.bnbchain.org/en/blog/bsc-post-quantum-cryptography-migration-report",
         checked_on=EVM_CHECKED_ON,
+    ),
+    ChainPqStatus(
+        chain="opbnb",
+        network="mainnet",
+        state=PqState.NONE_LIVE,
+        scheme=None,
+        since="",
+        detected=False,
+        note=(
+            "No post-quantum statement found in the opBNB docs; BNB Smart Chain's own work is "
+            "research only (see its row)."
+        ),
+        source="https://docs.bnbchain.org/bnb-opbnb/",
+        checked_on=BNB_CHECKED_ON,
     ),
     ChainPqStatus(
         chain="bitcoin",

@@ -1,4 +1,4 @@
-"""Smoke tests against the six EVM testnets. Run with ``pytest -m live --no-cov``.
+"""Smoke tests against the EVM testnets. Run with ``pytest -m live --no-cov``.
 
 History tests need the services' free keys in the environment or in .env
 (``BLOCKSCOUT_API_KEY``, ``ETHERSCAN_API_KEY``, ``NODEREAL_API_KEY``); without one they are
@@ -115,6 +115,44 @@ def test_bnb_mainnet_history_from_nodereal() -> None:
         records = indexer.account_transactions(BSC_ACCOUNT, limit=1)
     assert records
     assert records[0].native.history_source == "nodereal"
+
+
+# One transaction each, read on 2026-11-16: (network, sender, block, transaction).
+OPBNB_TRANSACTIONS = (
+    (
+        "mainnet",
+        "0xffc2aa8efdebc53bfb9118d54541d78d00f0cd50",
+        206_927_889,
+        "0x172bd6dbe0b04dbb5c0f150fcdab1a0b4a2e4d526209197005d104eea242f0ab",
+    ),
+    (
+        "testnet",
+        "0xbcf0e3b8e7508b771ae71d9bb41c81369601dcaf",
+        224_085_487,
+        "0xa397d84a28b5fa8cf2678653c1c8feef5c1ac27794145e90f86fcc64a6853b82",
+    ),
+)
+
+
+@pytest.mark.parametrize(("network", "sender", "block", "tx_hash"), OPBNB_TRANSACTIONS)
+async def test_opbnb_history_from_nodereal(
+    network: str, sender: str, block: int, tx_hash: str
+) -> None:
+    require_key("NODEREAL_API_KEY")
+    adapter = create_indexer("opbnb", network, Settings.from_env())
+    try:
+        records = [
+            record
+            async for page in adapter.iter_account_transactions(
+                sender, from_height=block, to_height=block
+            )
+            for record in page.records
+        ]
+    finally:
+        await adapter.aclose()
+    assert [record.id for record in records] == [tx_hash]
+    assert records[0].native.history_source == "nodereal"
+    assert records[0].native.l1_data is not None
 
 
 def test_example_script_runs(monkeypatch: pytest.MonkeyPatch) -> None:

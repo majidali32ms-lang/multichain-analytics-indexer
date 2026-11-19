@@ -11,4 +11,5 @@ register_chain("optimism", "multichain_indexer.adapters.evm:create_optimism_inde
 register_chain("base", "multichain_indexer.adapters.evm:create_base_indexer")
 register_chain("polygon", "multichain_indexer.adapters.evm:create_polygon_indexer")
 register_chain("bnb", "multichain_indexer.adapters.evm:create_bnb_indexer")
+register_chain("opbnb", "multichain_indexer.adapters.evm:create_opbnb_indexer")
 register_chain("bitcoin", "multichain_indexer.adapters.bitcoin:create_indexer")

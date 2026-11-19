@@ -36,7 +36,7 @@ _P = ParamSpec("_P")
 _T = TypeVar("_T")
 
 DEFAULT_RECENT_TRANSACTIONS = 10
-EVM_CHAINS = ("ethereum", "arbitrum", "optimism", "base", "polygon", "bnb")
+EVM_CHAINS = ("ethereum", "arbitrum", "optimism", "base", "polygon", "bnb", "opbnb")
 # Lines a data provider's terms require wherever its data is shown, keyed by the history
 # source named in a record's native block. Human-readable output only, never in exports.
 ATTRIBUTIONS = {"etherscan": "Powered by Etherscan.io APIs"}

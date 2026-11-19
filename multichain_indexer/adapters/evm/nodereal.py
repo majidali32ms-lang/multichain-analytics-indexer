@@ -1,8 +1,10 @@
-"""Account history on BNB Smart Chain mainnet from NodeReal's ``nr_getAssetTransfers``.
+"""Account history on BNB Smart Chain mainnet and opBNB from NodeReal's ``nr_getAssetTransfers``.
 
-NodeReal serves the method on BSC mainnet only, not on BSC testnet; ``transfers.py`` walks it.
-The range must be shorter than 2,000,000 blocks, as measured on 2026-11-11 (the docs say
-100,000, which is not enforced). NodeReal indexes a few blocks behind the chain and refuses a
+NodeReal serves the method on BSC mainnet and on opBNB mainnet and testnet, not on BSC testnet;
+``transfers.py`` walks it. Its method reference still says "BSC and ETH mainnet only", but its
+opBNB Enhanced API page lists both opBNB networks, and both answered with a free key on
+2026-11-16. The range must be shorter than 2,000,000 blocks, as measured on 2026-11-11 (the docs
+say 100,000, which is not enforced). NodeReal indexes a few blocks behind the chain and refuses a
 range that ends past what it has indexed with "blockNum not reached". The free API key is
 ``NODEREAL_API_KEY``. The ``all`` scope adds category ``20``, BEP-20 transfers.
 """
@@ -12,6 +14,8 @@ from __future__ import annotations
 from multichain_indexer.adapters.evm.history import HistorySource, SourceContext
 from multichain_indexer.adapters.evm.transfers import TransferApi, create_transfer_history
 
+# At 0.45 s a block on BNB Smart Chain this is about five days of blocks; at 0.25 s on opBNB,
+# about three.
 WINDOW_BLOCKS = 1_000_000
 # The free plan allows 150 compute units a second per key and this method costs 250, so
 # about one call every 1.7 seconds; slower still leaves room for retries.
@@ -22,9 +26,13 @@ NODEREAL = TransferApi(
     method="nr_getAssetTransfers",
     key_setting="NODEREAL_API_KEY",
     key_url="https://dashboard.nodereal.io",
-    servers={("bnb", "mainnet"): "https://bsc-mainnet.nodereal.io"},
+    servers={
+        ("bnb", "mainnet"): "https://bsc-mainnet.nodereal.io",
+        ("opbnb", "mainnet"): "https://opbnb-mainnet.nodereal.io",
+        ("opbnb", "testnet"): "https://opbnb-testnet.nodereal.io",
+    },
     key_path="/v1/",
-    serves="BNB Smart Chain mainnet",
+    serves="BNB Smart Chain mainnet, opBNB mainnet and opBNB testnet",
     token_category="20",
     window_blocks=WINDOW_BLOCKS,
     not_reached="blockNum not reached",

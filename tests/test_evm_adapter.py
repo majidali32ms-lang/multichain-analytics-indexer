@@ -129,6 +129,7 @@ def test_every_planned_evm_chain_has_a_profile_and_is_registered() -> None:
         ("base", 8453, BASE_SEPOLIA, "ETH"),
         ("polygon", 137, 80002, "POL"),
         ("bnb", BNB_MAINNET, BNB_TESTNET, "BNB"),
+        ("opbnb", 204, 5611, "BNB"),
     ],
 )
 def test_profiles_hold_each_chains_documented_ids_and_gas_token(

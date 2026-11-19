@@ -141,7 +141,25 @@ BNB = EvmChain(
     },
 )
 
-EVM_CHAINS: tuple[EvmChain, ...] = (ETHEREUM, ARBITRUM, OPTIMISM, BASE, POLYGON, BNB)
+# docs.bnbchain.org/bnb-opbnb/get-started/network-info. opBNB is an OP Stack layer 2 on BNB Smart
+# Chain: its receipts report the L1 data fee paid to BNB Smart Chain, and its "finalized" block is
+# one whose batch sits in a finalized BNB Smart Chain block.
+OPBNB = EvmChain(
+    name="opbnb",
+    title="opBNB",
+    native_symbol="BNB",
+    token_standard="BEP-20",
+    networks={
+        MAINNET: EvmNetwork(
+            "opBNB mainnet", 204, "https://opbnb-mainnet-rpc.bnbchain.org", NODEREAL
+        ),
+        TESTNET: EvmNetwork(
+            "opBNB testnet", 5611, "https://opbnb-testnet-rpc.bnbchain.org", NODEREAL
+        ),
+    },
+)
+
+EVM_CHAINS: tuple[EvmChain, ...] = (ETHEREUM, ARBITRUM, OPTIMISM, BASE, POLYGON, BNB, OPBNB)
 
 PUBLIC_NETWORKS_BY_CHAIN_ID: Mapping[int, EvmNetwork] = {
     network.chain_id: network for chain in EVM_CHAINS for network in chain.networks.values()
