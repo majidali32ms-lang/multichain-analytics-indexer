@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 
@@ -144,7 +145,9 @@ async def test_retry_after_holds_back_the_next_request(
     client = make_client(limiter=RateLimiter(1000))
     started = asyncio.get_running_loop().time()
     assert await client.get_json("/x") == {"ok": True}
-    assert asyncio.get_running_loop().time() - started >= 0.19
+    # The loop's clock ticks every 15.6 ms on Windows, so a 0.2 s wait can read one tick short.
+    tick = time.get_clock_info("monotonic").resolution
+    assert asyncio.get_running_loop().time() - started >= 0.2 - 2 * tick
 
 
 @pytest.mark.parametrize("header", ["soon", "-1"])

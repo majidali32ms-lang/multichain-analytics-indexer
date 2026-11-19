@@ -43,11 +43,15 @@ class EvmNetwork:
 
 @dataclass(frozen=True)
 class EvmChain:
+    """``economic_finality`` marks a chain whose nodes serve ``eth_getFinalizedHeader``, BNB
+    Smart Chain's Economic Finality API; the others use the ``finalized`` block tag."""
+
     name: str
     title: str
     native_symbol: str
     token_standard: str
     networks: Mapping[str, EvmNetwork]
+    economic_finality: bool = False
 
     @property
     def network_names(self) -> tuple[str, ...]:
@@ -123,25 +127,46 @@ POLYGON = EvmChain(
     },
 )
 
-# docs.bnbchain.org/bnb-smart-chain/developers/json_rpc/json-rpc-endpoint
+# docs.bnbchain.org/bnb-smart-chain/developers/json_rpc/json-rpc-endpoint. Its finality API is
+# on the same site's bsc-api-list page.
 BNB = EvmChain(
     name="bnb",
     title="BNB Smart Chain",
     native_symbol="BNB",
     token_standard="BEP-20",
+    economic_finality=True,
     networks={
         # Blockscout has no BNB Smart Chain explorer, and Etherscan serves it on paid plans only.
-        # NodeReal's free plan lists transfers on mainnet; nothing free lists testnet history.
+        # NodeReal's free plan lists transfers on mainnet; nothing free lists testnet history,
+        # so testnet reads blocks, a short range at a time (see scan.py).
         MAINNET: EvmNetwork(
             "BNB Smart Chain mainnet", 56, "https://bsc-dataseed.bnbchain.org", NODEREAL
         ),
         TESTNET: EvmNetwork(
-            "BNB Smart Chain testnet", 97, "https://bsc-testnet-dataseed.bnbchain.org", None
+            "BNB Smart Chain testnet", 97, "https://bsc-testnet-dataseed.bnbchain.org", RPC_SCAN
         ),
     },
 )
 
-EVM_CHAINS: tuple[EvmChain, ...] = (ETHEREUM, ARBITRUM, OPTIMISM, BASE, POLYGON, BNB)
+# docs.bnbchain.org/bnb-opbnb/get-started/network-info. opBNB is an OP Stack layer 2 on BNB Smart
+# Chain: its receipts report the L1 data fee paid to BNB Smart Chain, and its "finalized" block is
+# one whose batch sits in a finalized BNB Smart Chain block.
+OPBNB = EvmChain(
+    name="opbnb",
+    title="opBNB",
+    native_symbol="BNB",
+    token_standard="BEP-20",
+    networks={
+        MAINNET: EvmNetwork(
+            "opBNB mainnet", 204, "https://opbnb-mainnet-rpc.bnbchain.org", NODEREAL
+        ),
+        TESTNET: EvmNetwork(
+            "opBNB testnet", 5611, "https://opbnb-testnet-rpc.bnbchain.org", NODEREAL
+        ),
+    },
+)
+
+EVM_CHAINS: tuple[EvmChain, ...] = (ETHEREUM, ARBITRUM, OPTIMISM, BASE, POLYGON, BNB, OPBNB)
 
 PUBLIC_NETWORKS_BY_CHAIN_ID: Mapping[int, EvmNetwork] = {
     network.chain_id: network for chain in EVM_CHAINS for network in chain.networks.values()

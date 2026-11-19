@@ -31,6 +31,7 @@ INTERVAL_SECONDS = {
     "base": 15.0,
     "polygon": 15.0,
     "bnb": 15.0,
+    "opbnb": 15.0,
     "bitcoin": 60.0,
 }
 

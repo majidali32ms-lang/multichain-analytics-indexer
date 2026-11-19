@@ -10,6 +10,7 @@ from __future__ import annotations
 from eth_utils.address import is_checksum_address, is_hex_address, to_checksum_address
 from eth_utils.crypto import keccak
 
+from multichain_indexer.adapters.evm.exposure import key_exposure
 from multichain_indexer.adapters.evm.models import EvmAccount, EvmContract
 from multichain_indexer.core.errors import InvalidAddress
 from multichain_indexer.core.models import AccountRecord, ContractRecord
@@ -48,11 +49,14 @@ def parse_account(
     chain: str,
     network: str,
 ) -> AccountRecord:
+    is_contract = is_contract_code(code)
+    delegated_to = _delegation_target(code)
     native = EvmAccount(
         nonce=nonce,
-        is_contract=is_contract_code(code),
-        delegated_to=_delegation_target(code),
+        is_contract=is_contract,
+        delegated_to=delegated_to,
         block_number=block_number,
+        key_exposure=key_exposure(nonce=nonce, is_contract=is_contract, delegated_to=delegated_to),
     )
     return AccountRecord(
         address=address, balance=balance, chain=chain, network=network, native=native

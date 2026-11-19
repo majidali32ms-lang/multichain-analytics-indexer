@@ -1,4 +1,4 @@
-"""Smoke tests against the six EVM testnets. Run with ``pytest -m live --no-cov``.
+"""Smoke tests against the EVM testnets. Run with ``pytest -m live --no-cov``.
 
 History tests need the services' free keys in the environment or in .env
 (``BLOCKSCOUT_API_KEY``, ``ETHERSCAN_API_KEY``, ``NODEREAL_API_KEY``); without one they are
@@ -8,6 +8,7 @@ skipped and say which key is missing.
 from __future__ import annotations
 
 import asyncio
+import json
 import runpy
 import sys
 from pathlib import Path
@@ -18,8 +19,11 @@ from nbclient import NotebookClient
 from pydantic import SecretStr
 
 from multichain_indexer import Indexer, WrongNetwork
-from multichain_indexer.adapters.evm import EvmIndexer
+from multichain_indexer.adapters.evm import EvmIndexer, holders
+from multichain_indexer.adapters.evm.balances import read_balances
+from multichain_indexer.adapters.evm.logs import iter_logs, nodereal_rpc
 from multichain_indexer.adapters.evm.profiles import BNB, EVM_CHAINS
+from multichain_indexer.adapters.evm.transactions import TRANSFER_TOPIC
 from multichain_indexer.core.config import Settings
 from multichain_indexer.core.registry import create_indexer
 
@@ -32,6 +36,7 @@ SEPOLIA_ACCOUNT = "0xAA37651031A4b641962550415dB2C43E8d962232"
 # A small BNB Smart Chain mainnet sender, two transactions in its newest million blocks.
 BSC_ACCOUNT = "0x5664a59eee2ab649c218da75c47805935c4a20cb"
 EXAMPLES = Path(__file__).parent.parent / "examples" / "evm"
+FIXTURES = Path(__file__).parent / "fixtures" / "evm"
 
 
 def require_key(name: str) -> None:
@@ -83,6 +88,56 @@ async def test_bnb_testnet_reads_a_recent_transaction_by_hash() -> None:
     assert record.native.block_number <= head
 
 
+async def test_bnb_testnet_history_from_a_short_block_scan() -> None:
+    adapter = create_indexer("bnb", None, Settings())
+    assert isinstance(adapter, EvmIndexer)
+    try:
+        head = await adapter.chain_head()
+        sent = (await adapter._rpc.block_transactions(await _busy_block(adapter, head - 5)))[0]
+        block = int(str(sent["blockNumber"]), 16)
+        hashes = [
+            record.id
+            async for page in adapter.iter_account_transactions(
+                str(sent["from"]), from_height=block, to_height=block
+            )
+            for record in page.records
+        ]
+    finally:
+        await adapter.aclose()
+    assert sent["hash"] in hashes
+
+
+# The fixture's BEP-20 receiver is named only in the token's Transfer log, so only the "all"
+# scope lists the transaction for it.
+async def test_bnb_testnet_all_scope_reads_token_transfers_from_nodereal() -> None:
+    require_key("NODEREAL_API_KEY")
+    saved = json.loads((FIXTURES / "tx_bsc_testnet_erc20.json").read_text("utf-8"))
+    (log,) = saved["receipt"]["logs"]
+    block = int(saved["receipt"]["blockNumber"], 16)
+    settings = Settings.from_env()
+    env = {**settings.env, "BNB_TESTNET_HISTORY_SCOPE": SecretStr("all")}
+    adapter = create_indexer("bnb", None, settings.model_copy(update={"env": env}))
+    try:
+        hashes = [
+            record.id
+            async for page in adapter.iter_account_transactions(
+                "0x" + log["topics"][2][-40:], from_height=block, to_height=block
+            )
+            for record in page.records
+        ]
+    finally:
+        await adapter.aclose()
+    assert hashes == [saved["transaction"]["hash"]]
+
+
+async def _busy_block(adapter: EvmIndexer, start: int) -> int:
+    for number in range(start, start - 20, -1):
+        if await adapter._rpc.block_transactions(number):
+            return number
+        await asyncio.sleep(0.5)
+    pytest.fail("no transaction in 20 recent BNB Smart Chain testnet blocks")
+
+
 async def _first_transaction_hash(adapter: EvmIndexer, start: int) -> str:
     for number in range(start, start - 20, -1):
         transactions = await adapter._rpc.block_transactions(number)
@@ -109,12 +164,68 @@ def test_polygon_amoy_history_from_etherscan() -> None:
     assert all(record.native.history_source == "etherscan" for record in head)
 
 
+@pytest.mark.parametrize(
+    ("chain", "network", "source"),
+    [
+        ("bnb", "mainnet", "eth_getFinalizedHeader"),
+        ("bnb", "testnet", "eth_getFinalizedHeader"),
+        ("opbnb", "mainnet", "finalized tag"),
+        ("opbnb", "testnet", "finalized tag"),
+    ],
+)
+def test_finality_readout(chain: str, network: str, source: str) -> None:
+    with Indexer(chain, network, settings=Settings()) as indexer:
+        finality = indexer.finality()
+    assert finality.source == source
+    assert finality.finalized_block <= finality.head_block
+    # Measured 2026-11-16: BNB Smart Chain mainnet 2-3 blocks, opBNB 92-128 blocks.
+    assert finality.lag_blocks < 1000
+
+
 def test_bnb_mainnet_history_from_nodereal() -> None:
     require_key("NODEREAL_API_KEY")
     with Indexer("bnb", "mainnet", settings=Settings.from_env()) as indexer:
         records = indexer.account_transactions(BSC_ACCOUNT, limit=1)
     assert records
     assert records[0].native.history_source == "nodereal"
+
+
+# One transaction each, read on 2026-11-16: (network, sender, block, transaction).
+OPBNB_TRANSACTIONS = (
+    (
+        "mainnet",
+        "0xffc2aa8efdebc53bfb9118d54541d78d00f0cd50",
+        206_927_889,
+        "0x172bd6dbe0b04dbb5c0f150fcdab1a0b4a2e4d526209197005d104eea242f0ab",
+    ),
+    (
+        "testnet",
+        "0xbcf0e3b8e7508b771ae71d9bb41c81369601dcaf",
+        224_085_487,
+        "0xa397d84a28b5fa8cf2678653c1c8feef5c1ac27794145e90f86fcc64a6853b82",
+    ),
+)
+
+
+@pytest.mark.parametrize(("network", "sender", "block", "tx_hash"), OPBNB_TRANSACTIONS)
+async def test_opbnb_history_from_nodereal(
+    network: str, sender: str, block: int, tx_hash: str
+) -> None:
+    require_key("NODEREAL_API_KEY")
+    adapter = create_indexer("opbnb", network, Settings.from_env())
+    try:
+        records = [
+            record
+            async for page in adapter.iter_account_transactions(
+                sender, from_height=block, to_height=block
+            )
+            for record in page.records
+        ]
+    finally:
+        await adapter.aclose()
+    assert [record.id for record in records] == [tx_hash]
+    assert records[0].native.history_source == "nodereal"
+    assert records[0].native.l1_data is not None
 
 
 def test_example_script_runs(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -199,3 +310,130 @@ async def test_base_mainnet_history_from_alchemy() -> None:
         await adapter.aclose()
     assert tuple(record.id for record in records) == BASE_WETH_TRANSACTIONS
     assert {record.native.history_source for record in records} == {"alchemy"}
+
+
+CAKE = "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82"
+# A busy BEP-20 token on opBNB mainnet: 2,057 transfers in 3,000 blocks on 2026-11-19.
+OPBNB_BEP20 = "0x9e5aac1ba1a2e6aed6b32689dfcf62a509ca96f3"
+CAKE_RANGE = (133_900_000, 133_900_400)
+
+
+async def test_holder_report_agrees_with_balances_read_before_the_range() -> None:
+    require_key("NODEREAL_API_KEY")
+    settings = Settings.from_env()
+    adapter = create_indexer("bnb", "mainnet", settings)
+    assert isinstance(adapter, EvmIndexer)
+    low, high = CAKE_RANGE
+    nodereal = nodereal_rpc(BNB, "mainnet", settings)
+    assert nodereal is not None
+    try:
+        report = await adapter.fetch_token_holders(CAKE, from_block=low, to_block=high)
+        windows = iter_logs(nodereal, low, high, [TRANSFER_TOPIC], CAKE)
+        parties = {
+            party
+            async for window in windows
+            for move in holders._moves(window)
+            for party in (move.sender, move.receiver)
+        } - {holders.ZERO_ADDRESS}
+        active = sorted(parties)
+        before = await read_balances(nodereal, CAKE, active, low - 1)
+        after = await read_balances(nodereal, CAKE, active, high)
+    finally:
+        await nodereal.aclose()
+        await adapter.aclose()
+    assert report.active_addresses == len(active)
+    assert report.new_holders == sum(1 for a in active if before[a] == 0 and after[a] > 0)
+    assert report.exited_holders == sum(1 for a in active if before[a] > 0 and after[a] == 0)
+    assert report.inconsistent_addresses == 0
+    assert report.transfers > 0
+
+
+def test_opbnb_holder_report_without_a_key_reads_the_newest_block() -> None:
+    with Indexer("opbnb", "mainnet", settings=Settings()) as indexer:
+        head = indexer.finality().head_block
+        report = indexer.token_holders(OPBNB_BEP20, from_block=head - 40)
+    assert report.to_block >= head
+    assert report.from_time <= report.to_time
+
+
+@pytest.mark.parametrize("network", ["mainnet", "testnet"])
+def test_bnb_validator_set_has_names(network: str) -> None:
+    with Indexer("bnb", network, settings=Settings()) as indexer:
+        validator_set = indexer.validators()
+    assert len(validator_set.validators) >= 4
+    named = [validator for validator in validator_set.validators if validator.moniker]
+    assert len(named) * 2 > len(validator_set.validators)
+
+
+async def test_bnb_block_system_transaction_is_labelled() -> None:
+    adapter = create_indexer("bnb", "mainnet", Settings())
+    assert isinstance(adapter, EvmIndexer)
+    try:
+        head = await adapter.chain_head()
+        transactions = await adapter._rpc.block_transactions(head - 3)
+        header = await adapter._rpc.block_header(head - 3, immutable=False)
+        system = [
+            tx for tx in transactions if str(tx["from"]).lower() == str(header["miner"]).lower()
+        ]
+        record = await adapter.fetch_transaction(str(system[-1]["hash"]))
+    finally:
+        await adapter.aclose()
+    assert record.native.bnb is not None
+    assert record.native.bnb.system_transaction
+    assert record.native.bnb.validator.lower() == str(header["miner"]).lower()
+
+
+# An EIP-7702 delegated account on BNB Smart Chain mainnet, found through a type 4
+# transaction on 2026-11-19, and the dead address, which has never sent anything.
+DELEGATED_ACCOUNT = "0x60d162eff2b7043c12174bd7da231a0996fd36e7"
+DEAD = "0x000000000000000000000000000000000000dEaD"
+
+
+def test_public_key_exposure_on_bnb_mainnet() -> None:
+    with Indexer("bnb", "mainnet", settings=Settings()) as indexer:
+        report = indexer.key_exposure([DELEGATED_ACCOUNT, DEAD, CAKE])
+    assert [row.status for row in report.accounts] == [
+        "public key revealed (EIP-7702 delegated account)",
+        "no transaction sent yet (nonce 0)",
+        "contract account (no private key)",
+    ]
+    assert report.revealed_share == 0.5
+
+
+# A CAS20 (BEP-702) stablecoin on BNB Smart Chain testnet, created in block 141,677,813 after the
+# Jenner hard fork reached testnet; 102 transfers in its first 50,000 blocks (read 2026-11-19).
+CAS20_STABLECOIN = "0xca52000000000000000001a96a592e8b818886d1"
+CAS20_CREATED = 141_677_813
+
+
+def test_cas20_token_on_bnb_testnet() -> None:
+    with Indexer("bnb", settings=Settings()) as indexer:
+        record = indexer.asset(CAS20_STABLECOIN)
+        standard = indexer.describe(record)["Standard"]
+    assert record.decimals == 6
+    assert standard == "BEP-20 (CAS20 stablecoin, BEP-702)"
+
+
+def test_cas20_holder_report_from_its_creation() -> None:
+    require_key("NODEREAL_API_KEY")
+    with Indexer("bnb", settings=Settings.from_env()) as indexer:
+        report = indexer.token_holders(
+            CAS20_STABLECOIN, from_block=CAS20_CREATED, to_block=CAS20_CREATED + 49_999
+        )
+    assert report.transfers == 102
+    assert report.new_holders == report.active_addresses
+    assert report.inconsistent_addresses == 0
+
+
+BNB_EXAMPLES = Path(__file__).parent.parent / "examples" / "bnb"
+
+
+def test_bnb_token_report_script_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys, "argv", ["token_report.py"])
+    runpy.run_path(str(BNB_EXAMPLES / "token_report.py"), run_name="__main__")
+
+
+@pytest.mark.filterwarnings("ignore:Proactor event loop:RuntimeWarning")
+def test_bnb_token_report_notebook_runs() -> None:
+    notebook = nbformat.read(BNB_EXAMPLES / "token_report.ipynb", as_version=4)
+    NotebookClient(notebook, timeout=300, kernel_name="python3").execute()
