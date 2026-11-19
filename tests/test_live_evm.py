@@ -314,7 +314,7 @@ async def test_base_mainnet_history_from_alchemy() -> None:
 
 CAKE = "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82"
 # A busy BEP-20 token on opBNB mainnet: 2,057 transfers in 3,000 blocks on 2026-11-19.
-OPBNB_TOKEN = "0x9e5aac1ba1a2e6aed6b32689dfcf62a509ca96f3"
+OPBNB_BEP20 = "0x9e5aac1ba1a2e6aed6b32689dfcf62a509ca96f3"
 CAKE_RANGE = (133_900_000, 133_900_400)
 
 
@@ -351,7 +351,7 @@ async def test_holder_report_agrees_with_balances_read_before_the_range() -> Non
 def test_opbnb_holder_report_without_a_key_reads_the_newest_block() -> None:
     with Indexer("opbnb", "mainnet", settings=Settings()) as indexer:
         head = indexer.finality().head_block
-        report = indexer.token_holders(OPBNB_TOKEN, from_block=head - 40)
+        report = indexer.token_holders(OPBNB_BEP20, from_block=head - 40)
     assert report.to_block >= head
     assert report.from_time <= report.to_time
 
@@ -402,13 +402,13 @@ def test_public_key_exposure_on_bnb_mainnet() -> None:
 
 # A CAS20 (BEP-702) stablecoin on BNB Smart Chain testnet, created in block 141,677,813 after the
 # Jenner hard fork reached testnet; 102 transfers in its first 50,000 blocks (read 2026-11-19).
-CAS20_TOKEN = "0xca52000000000000000001a96a592e8b818886d1"
+CAS20_STABLECOIN = "0xca52000000000000000001a96a592e8b818886d1"
 CAS20_CREATED = 141_677_813
 
 
 def test_cas20_token_on_bnb_testnet() -> None:
     with Indexer("bnb", settings=Settings()) as indexer:
-        record = indexer.asset(CAS20_TOKEN)
+        record = indexer.asset(CAS20_STABLECOIN)
         standard = indexer.describe(record)["Standard"]
     assert record.decimals == 6
     assert standard == "BEP-20 (CAS20 stablecoin, BEP-702)"
@@ -418,7 +418,7 @@ def test_cas20_holder_report_from_its_creation() -> None:
     require_key("NODEREAL_API_KEY")
     with Indexer("bnb", settings=Settings.from_env()) as indexer:
         report = indexer.token_holders(
-            CAS20_TOKEN, from_block=CAS20_CREATED, to_block=CAS20_CREATED + 49_999
+            CAS20_STABLECOIN, from_block=CAS20_CREATED, to_block=CAS20_CREATED + 49_999
         )
     assert report.transfers == 102
     assert report.new_holders == report.active_addresses

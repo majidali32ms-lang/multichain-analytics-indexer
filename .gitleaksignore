@@ -5,3 +5,11 @@
 
 # A made-up Alchemy key in a test, read as a real one; the value is now a plain placeholder.
 b108699c499b21c81662eef5b78f76d1eadf33ff:tests/test_evm_alchemy.py:generic-api-key:26
+
+# A public opBNB BEP-20 contract address in a live test, read as a key because the constant was
+# named OPBNB_TOKEN; it is now OPBNB_BEP20.
+34b57fe48a046dc5cf66bc4f0629c1afd4b84648:tests/test_live_evm.py:generic-api-key:317
+
+# A public CAS20 token address in a live test, read as a key because the constant was named
+# CAS20_TOKEN; it is now CAS20_STABLECOIN.
+5ece958b964ccfc79da2cf674c09597a45722735:tests/test_live_evm.py:generic-api-key:405
