@@ -13,3 +13,7 @@ b108699c499b21c81662eef5b78f76d1eadf33ff:tests/test_evm_alchemy.py:generic-api-k
 # A public CAS20 token address in a live test, read as a key because the constant was named
 # CAS20_TOKEN; it is now CAS20_STABLECOIN.
 5ece958b964ccfc79da2cf674c09597a45722735:tests/test_live_evm.py:generic-api-key:405
+
+# The public USDT contract address on opBNB in the example, read as a key because the constant
+# was named DEFAULT_TOKEN; it is now DEFAULT_BEP20.
+668955f50f77528994c61070800c1b287d0297ff:examples/bnb/token_report.py:generic-api-key:21

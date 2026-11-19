@@ -18,7 +18,7 @@ from multichain_indexer.core.config import Settings
 DEFAULT_CHAIN = "opbnb"
 DEFAULT_NETWORK = "mainnet"
 # Tether USD on opBNB mainnet.
-DEFAULT_TOKEN = "0x9e5aac1ba1a2e6aed6b32689dfcf62a509ca96f3"
+DEFAULT_BEP20 = "0x9e5aac1ba1a2e6aed6b32689dfcf62a509ca96f3"
 DEFAULT_BLOCKS = 1_200
 
 
@@ -51,6 +51,6 @@ if __name__ == "__main__":
     report(
         arguments[0] if len(arguments) > 0 else DEFAULT_CHAIN,
         arguments[1] if len(arguments) > 1 else DEFAULT_NETWORK,
-        arguments[2] if len(arguments) > 2 else DEFAULT_TOKEN,
+        arguments[2] if len(arguments) > 2 else DEFAULT_BEP20,
         int(arguments[3]) if len(arguments) > 3 else DEFAULT_BLOCKS,
     )
