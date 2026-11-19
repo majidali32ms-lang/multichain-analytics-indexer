@@ -309,6 +309,43 @@ def index_holders(
         click.echo(f"  {day}  {count}")
 
 
+@index.command("exposure")
+@click.argument("addresses", nargs=-1)
+@click.option(
+    "--file",
+    "address_file",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="A file with one address per line.",
+)
+@click.option("--json", "as_json", is_flag=True, help="Print the report as JSON.")
+@click.pass_obj
+@_with_indexer
+def index_exposure(
+    indexer: Indexer, addresses: tuple[str, ...], address_file: Path | None, as_json: bool
+) -> None:
+    """Show whether EVM accounts have revealed their public keys (nonce > 0), as of query time,
+    and the share of the accounts that can sign."""
+    _require_chain(indexer, EVM_CHAINS, "index exposure")
+    report = indexer.key_exposure([*addresses, *_lines(address_file)])
+    if as_json:
+        click.echo(report.model_dump_json(indent=2))
+        return
+    for row in report.accounts:
+        click.echo(f"  {row.address}  {row.status}")
+    click.echo()
+    counts = {status[0].upper() + status[1:]: str(n) for status, n in report.counts.items()}
+    _echo_fields(
+        {
+            "Accounts": str(len(report.accounts)),
+            **counts,
+            "Revealed share": f"{_percent(report.revealed_share)} of the accounts that can sign",
+            "As of": f"blocks {report.from_block} to {report.to_block}, "
+            f"{_milliseconds(report.observed_at)}",
+        }
+    )
+    click.echo(report.note)
+
+
 @index.command("validators")
 @click.pass_obj
 @_with_indexer
@@ -688,6 +725,12 @@ def _require_chain(indexer: Indexer, chains: str | tuple[str, ...], command: str
     allowed = (chains,) if isinstance(chains, str) else chains
     if indexer.profile.name not in allowed:
         raise InvalidInput(f"{command} is for {', '.join(allowed)}, not {indexer.profile.name}")
+
+
+def _lines(path: Path | None) -> list[str]:
+    if path is None:
+        return []
+    return [line.strip() for line in path.read_text("utf-8").splitlines() if line.strip()]
 
 
 def _holder_fields(report: EvmTokenHolders) -> dict[str, str]:

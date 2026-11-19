@@ -14,13 +14,16 @@ class EvmAccount(NativeData):
 
     ``nonce`` counts the transactions an externally owned account has sent, or the contracts
     a contract has created. ``delegated_to`` is set when an externally owned account has
-    delegated its code to a contract under EIP-7702.
+    delegated its code to a contract under EIP-7702. ``key_exposure`` says whether the
+    account's public key is on chain as of that block (``exposure.py`` has the rule).
     """
 
     nonce: int = Field(ge=0)
     is_contract: bool
     delegated_to: str | None = None
     block_number: int = Field(ge=0)
+    # None in snapshots stored before version 0.8.0.
+    key_exposure: str | None = None
 
 
 class EvmContract(NativeData):
@@ -230,3 +233,31 @@ class EvmValidatorSet(BaseModel):
     block_number: int = Field(ge=0)
     observed_at: datetime
     validators: tuple[EvmValidator, ...]
+
+
+class EvmExposure(BaseModel):
+    """One account's public key status, read at ``block_number``."""
+
+    model_config = ConfigDict(frozen=True)
+
+    address: str
+    status: str
+    block_number: int = Field(ge=0)
+
+
+class EvmExposureReport(BaseModel):
+    """Public key status of a list of accounts, read at query time (``from_block`` to
+    ``to_block``). ``revealed_share`` is the part of the accounts that can sign (all but
+    contracts) whose key is revealed; ``note`` says why it is a lower bound."""
+
+    model_config = ConfigDict(frozen=True)
+
+    chain: str
+    network: str
+    from_block: int = Field(ge=0)
+    to_block: int = Field(ge=0)
+    observed_at: datetime
+    accounts: tuple[EvmExposure, ...]
+    counts: dict[str, int]
+    revealed_share: float | None = Field(default=None, ge=0, le=1)
+    note: str

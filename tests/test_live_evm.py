@@ -381,3 +381,20 @@ async def test_bnb_block_system_transaction_is_labelled() -> None:
     assert record.native.bnb is not None
     assert record.native.bnb.system_transaction
     assert record.native.bnb.validator.lower() == str(header["miner"]).lower()
+
+
+# An EIP-7702 delegated account on BNB Smart Chain mainnet, found through a type 4
+# transaction on 2026-11-19, and the dead address, which has never sent anything.
+DELEGATED_ACCOUNT = "0x60d162eff2b7043c12174bd7da231a0996fd36e7"
+DEAD = "0x000000000000000000000000000000000000dEaD"
+
+
+def test_public_key_exposure_on_bnb_mainnet() -> None:
+    with Indexer("bnb", "mainnet", settings=Settings()) as indexer:
+        report = indexer.key_exposure([DELEGATED_ACCOUNT, DEAD, CAKE])
+    assert [row.status for row in report.accounts] == [
+        "public key revealed (EIP-7702 delegated account)",
+        "no transaction sent yet (nonce 0)",
+        "contract account (no private key)",
+    ]
+    assert report.revealed_share == 0.5

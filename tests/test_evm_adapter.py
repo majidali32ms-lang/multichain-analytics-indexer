@@ -247,6 +247,7 @@ async def test_account_of_an_externally_owned_account(node: FakeNode, base: EvmI
         "Balance": "1.5 ETH",
         "Nonce": "7",
         "As of block": str(WETH_BLOCK),
+        "Public key": f"public key revealed (nonce > 0), as of block {WETH_BLOCK} (query time)",
     }
 
 

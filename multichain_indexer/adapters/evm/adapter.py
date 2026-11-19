@@ -23,6 +23,7 @@ from multichain_indexer.adapters.evm.explorer import (
     create_blockscout_history,
     create_etherscan_history,
 )
+from multichain_indexer.adapters.evm.exposure import exposure_report
 from multichain_indexer.adapters.evm.history import (
     HISTORY_SCOPES,
     SCOPE_DIRECT,
@@ -41,6 +42,7 @@ from multichain_indexer.adapters.evm.metrics import evm_metrics
 from multichain_indexer.adapters.evm.models import (
     EvmAccount,
     EvmContract,
+    EvmExposureReport,
     EvmFinality,
     EvmToken,
     EvmTokenHolders,
@@ -104,6 +106,10 @@ TWO_THIRDS_OF_VALIDATORS = -2
 ECONOMIC_FINALITY_SOURCE = "eth_getFinalizedHeader"
 FINALIZED_TAG_SOURCE = "finalized tag"
 BNB_CHAIN_NAME = "bnb"
+MAX_EXPOSURE_ADDRESSES = 500
+# Two requests an account at 5 a second: about 10 seconds, 22 blocks on BNB Smart Chain and 40 on
+# opBNB, well inside the 100 blocks of state public endpoints keep.
+EXPOSURE_ADDRESSES_PER_BLOCK = 25
 HEX_CHARACTERS = frozenset("0123456789abcdefABCDEF")
 
 HISTORY_SOURCES: dict[str, HistorySourceFactory] = {
@@ -277,6 +283,42 @@ class EvmIndexer(BaseIndexer):
             if extra is not self._rpc:
                 self._extra_requests += extra.requests_made
                 await extra.aclose()
+
+    async def fetch_exposure(self, addresses: Sequence[str]) -> EvmExposureReport:
+        """Return whether each account has revealed its public key, read now.
+
+        Public endpoints keep state for about the newest 100 blocks, so the newest block is
+        read again every ``EXPOSURE_ADDRESSES_PER_BLOCK`` accounts; a revealed key stays
+        revealed, so accounts read at different blocks still add up.
+
+        Raises:
+            InvalidInput: No address, more than ``MAX_EXPOSURE_ADDRESSES``, or a bad address.
+        """
+        accounts = [self.validate_address(address) for address in addresses]
+        if not 0 < len(accounts) <= MAX_EXPOSURE_ADDRESSES:
+            raise InvalidInput(f"give between 1 and {MAX_EXPOSURE_ADDRESSES} addresses")
+        await self._require_chain()
+        states: list[EvmAccount] = []
+        block = 0
+        for position, address in enumerate(accounts):
+            if position % EXPOSURE_ADDRESSES_PER_BLOCK == 0:
+                block = await self._rpc.block_number()
+            states.append(await self._account_state(address, block))
+        return exposure_report(
+            chain=self.chain.name, network=self.network, accounts=states, addresses=accounts
+        )
+
+    async def _account_state(self, address: str, block: int) -> EvmAccount:
+        record = parse_account(
+            address=address,
+            balance=0,
+            nonce=await self._rpc.transaction_count(address, block),
+            code=await self._rpc.code(address, block),
+            block_number=block,
+            chain=self.chain.name,
+            network=self.network,
+        )
+        return cast(EvmAccount, record.native)
 
     async def fetch_validators(self) -> EvmValidatorSet:
         """Return BNB Smart Chain's current validators with their registered names.
@@ -603,13 +645,18 @@ class EvmIndexer(BaseIndexer):
             kind = f"externally owned account, delegated to {native.delegated_to} (EIP-7702)"
         else:
             kind = "externally owned account"
-        return {
+        fields = {
             "Address": record.address,
             "Kind": kind,
             "Balance": self.profile.format_native(record.balance),
             "Nonce": str(native.nonce),
             "As of block": str(native.block_number),
         }
+        if native.key_exposure:
+            fields["Public key"] = (
+                f"{native.key_exposure}, as of block {native.block_number} (query time)"
+            )
+        return fields
 
 
 def _rpc_requests_per_second(settings: Settings) -> float:

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable, Coroutine, Sequence
 from pathlib import Path
 from types import TracebackType
 from typing import TYPE_CHECKING, Protocol, Self, TypeVar, runtime_checkable
@@ -45,6 +45,7 @@ if TYPE_CHECKING:
     # Only for annotations: the EVM adapter is loaded when an EVM chain is used, so the API
     # imports without it.
     from multichain_indexer.adapters.evm.models import (
+        EvmExposureReport,
         EvmFinality,
         EvmTokenHolders,
         EvmValidatorSet,
@@ -67,6 +68,13 @@ class _FinalityLookup(Protocol):
     """An adapter that reports how far its finalized block trails the newest one."""
 
     async def fetch_finality(self) -> EvmFinality: ...
+
+
+@runtime_checkable
+class _ExposureLookup(Protocol):
+    """An adapter that can say whether accounts have revealed their public keys."""
+
+    async def fetch_exposure(self, addresses: Sequence[str]) -> EvmExposureReport: ...
 
 
 @runtime_checkable
@@ -189,6 +197,17 @@ class AsyncIndexer:
         return await self._indexer.fetch_token_holders(
             token, from_block=from_block, to_block=to_block, nodereal_count=nodereal_count
         )
+
+    async def key_exposure(self, addresses: Sequence[str]) -> EvmExposureReport:
+        """Say for each EVM account whether its public key is revealed (nonce > 0), as of
+        query time, and the share of the accounts that can sign. Nothing is stored.
+
+        Raises:
+            UnsupportedChain: The chain is not an EVM chain.
+        """
+        if not isinstance(self._indexer, _ExposureLookup):
+            raise UnsupportedChain(f"{self.profile.name} has no EVM public key report")
+        return await self._indexer.fetch_exposure(addresses)
 
     async def validators(self) -> EvmValidatorSet:
         """Read BNB Smart Chain's current validators and their names. Nothing is stored.
@@ -390,6 +409,10 @@ class Indexer:
                 token, from_block=from_block, to_block=to_block, nodereal_count=nodereal_count
             )
         )
+
+    def key_exposure(self, addresses: Sequence[str]) -> EvmExposureReport:
+        """See ``AsyncIndexer.key_exposure``."""
+        return self._thread.run(self._inner.key_exposure(addresses))
 
     def validators(self) -> EvmValidatorSet:
         """See ``AsyncIndexer.validators``."""
