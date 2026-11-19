@@ -299,3 +299,9 @@ def test_index_token_on_an_address_without_bytecode_is_a_clear_error(
     assert result.output == (
         f"Error: no contract is deployed at {dead} on BNB Smart Chain testnet\n"
     )
+
+
+async def test_validators_on_a_chain_without_an_evm_adapter(tmp_path: Path) -> None:
+    async with AsyncIndexer("algorand", settings=Settings(database=tmp_path / "a.db")) as indexer:
+        with pytest.raises(UnsupportedChain, match="algorand has no BNB Smart Chain validator"):
+            await indexer.validators()

@@ -26,6 +26,7 @@ from multichain_indexer.adapters.evm.models import EvmAccount
 from multichain_indexer.adapters.evm.profiles import BNB
 from multichain_indexer.cli import cli
 from multichain_indexer.core.config import Settings
+from multichain_indexer.core.models import AccountRecord
 from tests.conftest import FakeNode, Reply
 
 # Real replies from BNB Smart Chain mainnet: an EIP-7702 delegated account (found through a
@@ -174,3 +175,15 @@ def test_cli_prints_json(node: FakeNode, tmp_path: Path) -> None:
     result = invoke(node, tmp_path, ACCOUNTS["delegated"]["address"], "--json")
     assert result.exit_code == 0, result.output
     assert json.loads(result.output)["accounts"][0]["status"] == DELEGATED
+
+
+def test_a_snapshot_stored_before_this_version_has_no_public_key_line() -> None:
+    adapter = indexer_factory(BNB)("mainnet", Settings(), None)
+    stored = AccountRecord(
+        address=ACCOUNTS["signer"]["address"],
+        balance=0,
+        chain="bnb",
+        network="mainnet",
+        native=EvmAccount(nonce=3, is_contract=False, block_number=1),
+    )
+    assert "Public key" not in adapter.describe(stored)

@@ -21,6 +21,7 @@ from multichain_indexer import (
     NetworkError,
     UnsupportedChain,
 )
+from multichain_indexer import cli as cli_module
 from multichain_indexer.adapters.evm import balances as balances_module
 from multichain_indexer.adapters.evm import holders as holders_module
 from multichain_indexer.adapters.evm import logs as logs_module
@@ -487,3 +488,10 @@ async def test_days_are_split_at_utc_midnight_by_bisection(node: FakeNode, rpc: 
     assert report.transfers == 4
     assert (report.total_supply, report.top_share_of_supply, report.top_holders) == (0, None, ())
     assert report.inconsistent_addresses == 3
+
+
+def test_cli_names_balances_that_do_not_follow_from_transfers() -> None:
+    report = EvmTokenHolders.model_validate({**SAVED["report"], "inconsistent_addresses": 2})
+    fields = cli_module._holder_fields(report)
+    assert fields["Balances not matching transfers"] == "2"
+    assert "Holders, whole chain" not in fields
