@@ -14,6 +14,7 @@ nav:
   - Solana: chains/solana.md
   - NEAR: chains/near.md
   - EVM chains: chains/evm.md
+  - BNB Chain (BSC and opBNB): chains/bnb.md
   - Bitcoin: chains/bitcoin.md
   - Post-quantum readiness: post-quantum.md
   - Cross-chain: cross-chain.md

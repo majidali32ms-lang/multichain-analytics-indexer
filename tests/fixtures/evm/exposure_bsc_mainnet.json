@@ -1,0 +1,28 @@
+{
+  "network": "BNB Smart Chain mainnet",
+  "read_on": "2026-11-19",
+  "block": "0x804fed0",
+  "chain_id": "0x38",
+  "accounts": {
+    "delegated": {
+      "address": "0x60d162eff2b7043c12174bd7da231a0996fd36e7",
+      "nonce": "0x16",
+      "code": "0xef010064fc23203fcc4bcf09fc4b30669131333ba7936b"
+    },
+    "signer": {
+      "address": "0x5009317fd4f6f8feea9dae41e5f0a4737bb7a7d5",
+      "nonce": "0x3de6c2",
+      "code": "0x"
+    },
+    "contract": {
+      "address": "0x55d398326f99059ff775485246999027b3197955",
+      "nonce": "0x1",
+      "code": "0x608060405234801561001057600080fd5b506004361061012c5760003560e01c8063893d20e8116100ad578063a9059cbb11610071578063a9059cbb1461035a578063b09f126614610386578063d28d88521461038e578063dd62ed3e146103965780"
+    },
+    "unused": {
+      "address": "0x000000000000000000000000000000000000dead",
+      "nonce": "0x0",
+      "code": "0x"
+    }
+  }
+}

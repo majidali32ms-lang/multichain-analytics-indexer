@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.8.0
+
+BNB Smart Chain and opBNB in their own terms.
+
+- opBNB (`--chain opbnb`), the OP Stack layer 2 on BNB Smart Chain: mainnet (chain ID 204) and
+  testnet (5611), the L1 data fee from its receipts (equal to opBNBScan's fee to the wei on the
+  saved transactions), account history from NodeReal on both networks. "opbnb" is added to
+  `PLANNED_CHAINS` in `core/registry.py`, the one change to core.
+- BNB Smart Chain finality from the node's own `eth_getFinalizedHeader(-2)`: the higher of the
+  fast-finalized block and the highest block two thirds of the validators have built on, so a
+  stall in fast finality falls back as the BNB Chain docs describe. The `finalized` tag is used
+  when the endpoint does not serve the method or names no block. The checkpoint never passes the
+  newest block, the finalized block or what the history service has indexed.
+- `index finality` and `Indexer.finality()`: how far the finalized block trails the newest one,
+  in blocks and milliseconds (from the headers' `milliTimestamp`), on every EVM chain.
+- BNB Smart Chain testnet history by reading blocks (`rpc-scan`), since no free service lists
+  it. A range of more than 20,000 blocks needs `BNB_TESTNET_SCAN_FROM_BLOCK`. With the `all`
+  scope the block scan adds token transfers from `Transfer` logs, read through NodeReal's
+  `eth_getLogs` on BNB Smart Chain (free `NODEREAL_API_KEY`).
+- `index holders` and `Indexer.token_holders()`: one ERC-20 or BEP-20 token over a block range,
+  from its `Transfer` logs: transfers, active addresses, holders at the end, new and leaving
+  holders, the ten largest balances and their share of supply, and transfers per UTC day. Every
+  report names its block range and the time it covers. Balances are read at one block through
+  Multicall3; `--nodereal-count` adds NodeReal's own holder count, labelled as NodeReal's.
+- BNB Smart Chain labels in `native.bnb`: the validator of each transaction's block, system
+  transactions (sent by the block's validator to a system contract at no gas price, as Parlia
+  defines them) and the system contract called. `metrics` adds `bnb_system_transactions` and
+  `top_validators_by_transactions`. `index validators` and `Indexer.validators()` list the
+  current validator set with the names registered in StakeHub.
+- CAS20 tokens (BEP-702, from the Jenner hard fork) are named in `index token`, as
+  `BEP-20 (CAS20 asset, BEP-702)` or `... stablecoin ...`.
+- Public key status on every EVM chain: `index account` shows whether the account's key is
+  revealed (nonce > 0), as of the block it read; `index exposure` and `Indexer.key_exposure()`
+  do the same for a list of up to 500 addresses, with the share of the accounts that can sign.
+  Contracts and EIP-7702 delegated accounts are named apart; the output says why the rule is a
+  lower bound.
+- The BNB Smart Chain post-quantum row was checked again on 2026-11-19 and opBNB has its own:
+  nothing is live on either.
+- Docs: a BNB Chain page with the rules, measurements, limits and a comparison with other tools;
+  `examples/bnb/` has a script and a notebook, "BNB token report".
+- Fixed a test that could fail on Windows: the Retry-After timing check now allows the clock's
+  15.6 ms tick.
+
 ## 0.7.0
 
 Adds what only a tool for many chains can do: every chain at once.

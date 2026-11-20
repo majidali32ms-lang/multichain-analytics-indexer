@@ -8,8 +8,9 @@ import json
 import os
 import sys
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
-from typing import Concatenate, ParamSpec, TextIO, TypeVar
+from typing import TYPE_CHECKING, Concatenate, ParamSpec, TextIO, TypeVar
 
 import click
 
@@ -26,6 +27,9 @@ from multichain_indexer.follow import FollowSummary, default_interval
 from multichain_indexer.pq import PQ_STATUS
 from multichain_indexer.report import REPORT_FORMATS, metrics_table, write_report
 
+if TYPE_CHECKING:
+    from multichain_indexer.adapters.evm.models import EvmTokenHolders
+
 if sys.platform == "win32":
     import ctypes
     import msvcrt
@@ -36,7 +40,7 @@ _P = ParamSpec("_P")
 _T = TypeVar("_T")
 
 DEFAULT_RECENT_TRANSACTIONS = 10
-EVM_CHAINS = ("ethereum", "arbitrum", "optimism", "base", "polygon", "bnb")
+EVM_CHAINS = ("ethereum", "arbitrum", "optimism", "base", "polygon", "bnb", "opbnb")
 # Lines a data provider's terms require wherever its data is shown, keyed by the history
 # source named in a record's native block. Human-readable output only, never in exports.
 ATTRIBUTIONS = {"etherscan": "Powered by Etherscan.io APIs"}
@@ -240,6 +244,122 @@ def index_tx(indexer: Indexer, txid: str) -> None:
             **indexer.describe(record),
         }
     )
+
+
+@index.command("finality")
+@click.pass_obj
+@_with_indexer
+def index_finality(indexer: Indexer) -> None:
+    """Show how far an EVM chain's finalized block trails its newest block, in blocks and
+    milliseconds; BNB Smart Chain uses its eth_getFinalizedHeader."""
+    _require_chain(indexer, EVM_CHAINS, "index finality")
+    finality = indexer.finality()
+    fields = {
+        "Newest block": f"{finality.head_block} ({_milliseconds(finality.head_time)})",
+        "Finalized block": f"{finality.finalized_block} ({_milliseconds(finality.finalized_time)})",
+        "Lag": f"{_count(finality.lag_blocks, 'block')}, {finality.lag_milliseconds} ms",
+        "Source": finality.source,
+        "Observed at": _milliseconds(finality.observed_at),
+    }
+    if finality.finalized_above_head:
+        fields["Note"] = "the endpoint reported a finalized block above its newest block"
+    _echo_fields(fields)
+
+
+@index.command("holders")
+@click.argument("token")
+@click.option("--from-block", type=click.IntRange(min=0), required=True, help="First block.")
+@click.option(
+    "--to-block",
+    type=click.IntRange(min=0),
+    help="Last block; defaults to the newest finalized block.",
+)
+@click.option(
+    "--nodereal-count",
+    is_flag=True,
+    help="Add NodeReal's own full-chain holder count (free key, 50 compute units).",
+)
+@click.option("--json", "as_json", is_flag=True, help="Print the report as JSON.")
+@click.pass_obj
+@_with_indexer
+def index_holders(
+    indexer: Indexer,
+    token: str,
+    from_block: int,
+    to_block: int | None,
+    nodereal_count: bool,
+    as_json: bool,
+) -> None:
+    """Show an ERC-20 or BEP-20 token's holders, transfers and top-ten share over a block
+    range, from its Transfer logs; only addresses that moved the token in the range count."""
+    _require_chain(indexer, EVM_CHAINS, "index holders")
+    report = indexer.token_holders(
+        token, from_block=from_block, to_block=to_block, nodereal_count=nodereal_count
+    )
+    if as_json:
+        click.echo(report.model_dump_json(indent=2))
+        return
+    _echo_fields(_holder_fields(report))
+    click.echo()
+    click.echo("Largest balances at the last block (base units, share of total supply):")
+    for holder in report.top_holders:
+        click.echo(f"  {holder.address}  {holder.balance}  {_percent(holder.share_of_supply)}")
+    click.echo("Transfers per day (UTC):")
+    for day, count in report.transfers_per_day.items():
+        click.echo(f"  {day}  {count}")
+
+
+@index.command("exposure")
+@click.argument("addresses", nargs=-1)
+@click.option(
+    "--file",
+    "address_file",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="A file with one address per line.",
+)
+@click.option("--json", "as_json", is_flag=True, help="Print the report as JSON.")
+@click.pass_obj
+@_with_indexer
+def index_exposure(
+    indexer: Indexer, addresses: tuple[str, ...], address_file: Path | None, as_json: bool
+) -> None:
+    """Show whether EVM accounts have revealed their public keys (nonce > 0), as of query time,
+    and the share of the accounts that can sign."""
+    _require_chain(indexer, EVM_CHAINS, "index exposure")
+    report = indexer.key_exposure([*addresses, *_lines(address_file)])
+    if as_json:
+        click.echo(report.model_dump_json(indent=2))
+        return
+    for row in report.accounts:
+        click.echo(f"  {row.address}  {row.status}")
+    click.echo()
+    counts = {status[0].upper() + status[1:]: str(n) for status, n in report.counts.items()}
+    _echo_fields(
+        {
+            "Accounts": str(len(report.accounts)),
+            **counts,
+            "Revealed share": f"{_percent(report.revealed_share)} of the accounts that can sign",
+            "As of": f"blocks {report.from_block} to {report.to_block}, "
+            f"{_milliseconds(report.observed_at)}",
+        }
+    )
+    click.echo(report.note)
+
+
+@index.command("validators")
+@click.pass_obj
+@_with_indexer
+def index_validators(indexer: Indexer) -> None:
+    """Show BNB Smart Chain's current validators: consensus address, operator and name."""
+    _require_chain(indexer, "bnb", "index validators")
+    validator_set = indexer.validators()
+    click.echo(
+        f"{len(validator_set.validators)} validators at block {validator_set.block_number} "
+        f"({_milliseconds(validator_set.observed_at)})"
+    )
+    for validator in validator_set.validators:
+        name = validator.moniker or "no name registered"
+        click.echo(f"  {validator.consensus_address}  {name}")
 
 
 @index.command("asset")
@@ -605,6 +725,47 @@ def _require_chain(indexer: Indexer, chains: str | tuple[str, ...], command: str
     allowed = (chains,) if isinstance(chains, str) else chains
     if indexer.profile.name not in allowed:
         raise InvalidInput(f"{command} is for {', '.join(allowed)}, not {indexer.profile.name}")
+
+
+def _lines(path: Path | None) -> list[str]:
+    if path is None:
+        return []
+    return [line.strip() for line in path.read_text("utf-8").splitlines() if line.strip()]
+
+
+def _holder_fields(report: EvmTokenHolders) -> dict[str, str]:
+    fields = {
+        "Token": f"{report.token} ({report.standard})",
+        "Blocks": f"{report.from_block} to {report.to_block}",
+        "Time covered": f"{_milliseconds(report.from_time)} to {_milliseconds(report.to_time)}",
+        "Transfers": str(report.transfers),
+        "Addresses active": str(report.active_addresses),
+        "Holders at the end": f"{report.holders_at_end} of the addresses active in the range",
+        "New holders": str(report.new_holders),
+        "Holders that left": str(report.exited_holders),
+        "Total supply": f"{report.total_supply} base units",
+        "Top-ten share": f"{_percent(report.top_share_of_supply)} of total supply (at least)",
+    }
+    if report.inconsistent_addresses:
+        fields["Balances not matching transfers"] = str(report.inconsistent_addresses)
+    if report.nodereal_compute_units is not None:
+        counted = "none" if report.nodereal_holder_count is None else report.nodereal_holder_count
+        fields["Holders, whole chain"] = (
+            f"{counted} according to NodeReal ({report.nodereal_compute_units} compute units)"
+        )
+    return fields
+
+
+def _percent(share: float | None) -> str:
+    return "unknown" if share is None else f"{share:.2%}"
+
+
+def _count(number: int, noun: str) -> str:
+    return f"{number} {noun}" if number == 1 else f"{number} {noun}s"
+
+
+def _milliseconds(moment: datetime) -> str:
+    return moment.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3] + " UTC"
 
 
 def _echo_fields(fields: dict[str, str]) -> None:

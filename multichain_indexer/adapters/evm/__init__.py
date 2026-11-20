@@ -6,6 +6,7 @@ from multichain_indexer.adapters.evm.profiles import (
     BASE,
     BNB,
     ETHEREUM,
+    OPBNB,
     OPTIMISM,
     POLYGON,
 )
@@ -16,6 +17,7 @@ create_optimism_indexer = indexer_factory(OPTIMISM)
 create_base_indexer = indexer_factory(BASE)
 create_polygon_indexer = indexer_factory(POLYGON)
 create_bnb_indexer = indexer_factory(BNB)
+create_opbnb_indexer = indexer_factory(OPBNB)
 
 __all__ = [
     "EvmIndexer",
@@ -23,6 +25,7 @@ __all__ = [
     "create_base_indexer",
     "create_bnb_indexer",
     "create_ethereum_indexer",
+    "create_opbnb_indexer",
     "create_optimism_indexer",
     "create_polygon_indexer",
 ]

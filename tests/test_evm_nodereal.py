@@ -18,7 +18,7 @@ from multichain_indexer import (
 )
 from multichain_indexer.adapters.evm import nodereal as nodereal_module
 from multichain_indexer.adapters.evm.adapter import indexer_factory
-from multichain_indexer.adapters.evm.profiles import BNB, ETHEREUM
+from multichain_indexer.adapters.evm.profiles import BNB, ETHEREUM, OPBNB
 from multichain_indexer.adapters.evm.transfers import TransferHistory
 from multichain_indexer.core.config import Settings
 from tests.conftest import FakeNode, Reply
@@ -187,7 +187,7 @@ async def test_a_transaction_to_oneself_is_listed_once(node: FakeNode, tmp_path:
     ("reply", "error", "message"),
     [
         (rpc_error(-32005, "ran out of cu"), RateLimited, "compute units"),
-        (rpc_error(-32601, "method not available"), ConfigError, "BNB Smart Chain mainnet only"),
+        (rpc_error(-32601, "method not available"), ConfigError, "opBNB testnet only"),
         (rpc_error(-32000, "range must be less than 2000000"), NetworkError, "2000000"),
         (Reply({"jsonrpc": "2.0", "id": 1, "error": "busy"}), NetworkError, "busy"),
         (rpc_ok("none"), MalformedResponse, "result object"),
@@ -232,6 +232,25 @@ def test_bnb_mainnet_defaults_to_nodereal(node: FakeNode, tmp_path: Path) -> Non
     assert isinstance(source_for(settings_for(node, tmp_path)), TransferHistory)
 
 
+@pytest.mark.parametrize(
+    ("network", "server"),
+    [
+        ("mainnet", "https://opbnb-mainnet.nodereal.io/v1/"),
+        ("testnet", "https://opbnb-testnet.nodereal.io/v1/"),
+    ],
+)
+async def test_opbnb_defaults_to_nodereal_on_both_networks(network: str, server: str) -> None:
+    adapter = indexer_factory(OPBNB)(
+        network, Settings(env={"NODEREAL_API_KEY": SecretStr(KEY)}), None
+    )
+    try:
+        history = adapter._history_source()
+        assert isinstance(history, TransferHistory)
+        assert history._client._base_url.get_secret_value() == server + KEY
+    finally:
+        await adapter.aclose()
+
+
 def test_missing_key_names_the_setting(node: FakeNode, tmp_path: Path) -> None:
     adapter = indexer_factory(BNB)(
         "mainnet", settings_for(node, tmp_path, NODEREAL_API_KEY=""), None
@@ -247,7 +266,7 @@ def test_other_networks_are_refused(chain: Any, network: str) -> None:
         "NODEREAL_API_KEY": SecretStr(KEY),
     }
     adapter = indexer_factory(chain)(network, Settings(env=env), None)
-    with pytest.raises(ConfigError, match="BNB Smart Chain mainnet only"):
+    with pytest.raises(ConfigError, match="opBNB testnet only"):
         adapter._history_source()
 
 
@@ -294,7 +313,7 @@ async def test_checkpoint_never_passes_what_nodereal_indexed(
     node.handlers[METHOD] = lagging(TOP - 250)
     node.routes["rpc:eth_chainId"] = rpc_ok(hex(56))
     node.routes["rpc:eth_blockNumber"] = rpc_ok(hex(TOP))
-    node.routes["rpc:eth_getBlockByNumber"] = rpc_ok({"number": hex(TOP - 2)})
+    node.routes["rpc:eth_getFinalizedHeader"] = rpc_ok({"number": hex(TOP - 2)})
     adapter = indexer_factory(BNB)("mainnet", settings_for(node, tmp_path), None)
     try:
         head = await adapter.chain_head()

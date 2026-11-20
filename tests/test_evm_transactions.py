@@ -44,7 +44,7 @@ def wei(value: str) -> int:
 
 
 def test_every_fixture_comes_from_its_chains_testnet_or_mainnet() -> None:
-    assert len(ALL_FIXTURES) == 15
+    assert len(ALL_FIXTURES) == 20
     for name in ALL_FIXTURES:
         raw = fixture(name)
         assert raw["transaction"]["hash"] == raw["receipt"]["transactionHash"]
@@ -184,6 +184,9 @@ def test_sepolia_blob_fee_matches_the_explorer() -> None:
         ("base_sepolia_native", 126_000_000_372),
         ("base_sepolia_eip1559", 134_400_000_372),
         ("op_sepolia_eip1559", 87_918_831_446),
+        # opBNBScan, 2026-11-19: "0.0000000092241473 BNB" and "0.000000085167000065 BNB".
+        ("opbnb_mainnet_eip1559", 9_224_147_300),
+        ("opbnb_testnet_bep20", 85_167_000_065),
     ],
 )
 def test_op_stack_fee_adds_the_l1_data_fee_as_the_explorer_does(
@@ -208,10 +211,20 @@ def test_op_stack_blob_gas_used_without_a_price_is_not_a_blob_fee(name: str) -> 
     assert native(parse(raw)).blob is None
 
 
-def test_op_stack_deposit_pays_nothing_on_l2() -> None:
-    record = parse(fixture("op_sepolia_deposit"))
+@pytest.mark.parametrize("name", ["op_sepolia_deposit", "opbnb_testnet_deposit"])
+def test_op_stack_deposit_pays_nothing_on_l2(name: str) -> None:
+    record = parse(fixture(name))
     assert native(record).kind == "deposit"
     assert record.fee == 0
+
+
+def test_opbnb_bep20_transfer_is_decoded_from_its_log() -> None:
+    raw = fixture("opbnb_testnet_bep20")
+    (transfer,) = native(parse(raw)).token_transfers
+    (log,) = raw["receipt"]["logs"]
+    assert transfer.kind == "fungible"
+    assert transfer.token.lower() == log["address"]
+    assert transfer.value == int(log["data"], 16)
 
 
 def test_arbitrum_l1_component_is_part_of_gas_used() -> None:
