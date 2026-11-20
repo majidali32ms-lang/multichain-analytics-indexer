@@ -1,0 +1,118 @@
+{
+ "chain": "bnb",
+ "network": "testnet",
+ "exchanges": [
+  {
+   "host": "bsc-testnet-dataseed.bnbchain.org",
+   "method": "eth_chainId",
+   "params": [],
+   "reply": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": "0x61"
+   }
+  },
+  {
+   "host": "bsc-testnet-dataseed.bnbchain.org",
+   "method": "eth_blockNumber",
+   "params": [],
+   "reply": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": "0x89069e0"
+   }
+  },
+  {
+   "host": "bsc-testnet-dataseed.bnbchain.org",
+   "method": "eth_getCode",
+   "params": [
+    "0xCa52000000000000000001a96a592e8b818886d1",
+    "0x89069e0"
+   ],
+   "reply": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": "0xef"
+   }
+  },
+  {
+   "host": "bsc-testnet-dataseed.bnbchain.org",
+   "method": "eth_call",
+   "params": [
+    {
+     "to": "0xCa52000000000000000001a96a592e8b818886d1",
+     "data": "0x18160ddd"
+    },
+    "0x89069e0"
+   ],
+   "reply": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": "0x00000000000000000000000000000000000000000000000000038d7ea4c68000"
+   }
+  },
+  {
+   "host": "bsc-testnet-dataseed.bnbchain.org",
+   "method": "eth_call",
+   "params": [
+    {
+     "to": "0xCa52000000000000000001a96a592e8b818886d1",
+     "data": "0x313ce567"
+    },
+    "0x89069e0"
+   ],
+   "reply": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": "0x0000000000000000000000000000000000000000000000000000000000000006"
+   }
+  },
+  {
+   "host": "bsc-testnet-dataseed.bnbchain.org",
+   "method": "eth_call",
+   "params": [
+    {
+     "to": "0xCa52000000000000000001a96a592e8b818886d1",
+     "data": "0x06fdde03"
+    },
+    "0x89069e0"
+   ],
+   "reply": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": "0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000123438636c75622043686170656c20546573740000000000000000000000000000"
+   }
+  },
+  {
+   "host": "bsc-testnet-dataseed.bnbchain.org",
+   "method": "eth_call",
+   "params": [
+    {
+     "to": "0xCa52000000000000000001a96a592e8b818886d1",
+     "data": "0x95d89b41"
+    },
+    "0x89069e0"
+   ],
+   "reply": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": "0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000035434380000000000000000000000000000000000000000000000000000000000"
+   }
+  }
+ ],
+ "report": {
+  "id": "0xCa52000000000000000001a96a592e8b818886d1",
+  "name": "48club Chapel Test",
+  "unit": "T48",
+  "decimals": 6,
+  "total": 1000000000000000,
+  "creator": null,
+  "chain": "bnb",
+  "network": "testnet",
+  "native": {
+   "standard": "BEP-20",
+   "decimals_declared": true,
+   "block_number": 143682016
+  }
+ }
+}

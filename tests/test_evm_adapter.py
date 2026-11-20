@@ -76,6 +76,8 @@ def serve_weth(node: FakeNode) -> None:
     for method, reply in WETH["replies"].items():
         node.routes[f"rpc:{method}"] = Reply(reply)
     node.routes["rpc:eth_getBlockByNumber"] = finalized_block()
+    # As Anvil and Ethereum clients answer it; BNB Smart Chain then uses the finalized tag.
+    node.routes["rpc:eth_getFinalizedHeader"] = rpc_error(-32601, "method not found")
 
 
 def serve_eoa(node: FakeNode, code: str = "0x") -> None:
@@ -129,6 +131,7 @@ def test_every_planned_evm_chain_has_a_profile_and_is_registered() -> None:
         ("base", 8453, BASE_SEPOLIA, "ETH"),
         ("polygon", 137, 80002, "POL"),
         ("bnb", BNB_MAINNET, BNB_TESTNET, "BNB"),
+        ("opbnb", 204, 5611, "BNB"),
     ],
 )
 def test_profiles_hold_each_chains_documented_ids_and_gas_token(
@@ -244,6 +247,7 @@ async def test_account_of_an_externally_owned_account(node: FakeNode, base: EvmI
         "Balance": "1.5 ETH",
         "Nonce": "7",
         "As of block": str(WETH_BLOCK),
+        "Public key": f"public key revealed (nonce > 0), as of block {WETH_BLOCK} (query time)",
     }
 
 

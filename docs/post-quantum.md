@@ -19,7 +19,8 @@ checked.
 | optimism | mainnet | none live yet |  |  | A roadmap exists, nothing is live: the Post-Quantum Roadmap for the Superchain (2026-01-14) plans to retire ECDSA accounts by January 2036, subject to governance, and has not chosen a scheme. | [source](https://optimism.io/blog/a-post-quantum-roadmap-for-the-superchain) | 2026-11-09 |
 | base | mainnet | none live yet |  |  | No official post-quantum statement found. Optimism's Superchain roadmap does not name Base, which has run its own stack since its Azul upgrade (2026); its P256VERIFY precompile is not post-quantum. | [source](https://base.org/blog/introducing-base-azul) | 2026-11-09 |
 | polygon | mainnet | none live yet |  |  | No official post-quantum statement found in the Polygon PoS docs, blog or improvement proposals. | [source](https://docs.polygon.technology/pos/overview/) | 2026-11-09 |
-| bnb | mainnet | none live yet |  |  | Research only: a migration report (2026-05-14) benchmarked ML-DSA-44 transaction signatures; its proof of concept was not merged, and no BEP enables them. | [source](https://www.bnbchain.org/en/blog/bsc-post-quantum-cryptography-migration-report) | 2026-11-09 |
+| bnb | mainnet | none live yet |  |  | Research and tests only: the BSC Post-Quantum Cryptography Migration Report (2026-05-14) tested ML-DSA-44 transaction signatures and pqSTARK vote aggregation; the BNB Chain H2 2026 Tech Roadmap (2026-07-08) says testing continues. The proof of concept (bnb-chain/bsc#3660) was closed unmerged, and no post-quantum BEP is merged; seven proposals are open. | [source](https://www.bnbchain.org/en/blog/bsc-post-quantum-cryptography-migration-report) | 2026-11-19 |
+| opbnb | mainnet | none live yet |  |  | No post-quantum statement found in the opBNB docs; BNB Smart Chain's own work is research only (see its row). | [source](https://docs.bnbchain.org/bnb-opbnb/) | 2026-11-19 |
 | bitcoin | mainnet | none live yet |  |  | BIP-360 (P2MR, a witness v2 output with no key path) and BIP-361 (migration and legacy signature sunset) are drafts with no activation parameters; no post-quantum signature BIP exists, and Bitcoin Core 32.1 adds none. | [source](https://github.com/bitcoin/bips/blob/master/bip-0360.mediawiki) | 2026-11-13 |
 
 `multichain-indexer pq-status` prints the same table. It comes from one file,
@@ -54,7 +55,20 @@ exists.
 confirmed unspent outputs are quantum-exposed: P2PK and P2TR by script type; P2PKH and P2WPKH
 once the address has spent in a confirmed block; P2SH and P2WSH show "script revealed" once
 spent. The [Bitcoin page](chains/bitcoin.md#quantum-exposed-outputs) has the rule and its
-limits.
+limits. EVM accounts report whether their public key is revealed (nonce > 0); the
+[BNB Chain page](chains/bnb.md#public-key-exposure) has the rule, which is the same on every
+EVM chain.
+
+**BNB Smart Chain and opBNB.** Research and tests only, as of 2026-11-19. The
+[BSC Post-Quantum Cryptography Migration Report](https://www.bnbchain.org/en/blog/bsc-post-quantum-cryptography-migration-report)
+(14 May 2026) tested ML-DSA-44 transaction signatures and pqSTARK aggregation of fast-finality
+votes; the
+[BNB Chain H2 2026 Tech Roadmap](https://www.bnbchain.org/en/blog/bnb-chain-h2-2026-tech-roadmap-doubling-down-on-speed)
+(8 July 2026) says testing continues and names no date. Its proof of concept,
+[bnb-chain/bsc#3660](https://github.com/bnb-chain/bsc/pull/3660), was closed unmerged on 11 May
+2026, and no post-quantum BEP is merged; seven post-quantum BEP pull requests are open in
+[bnb-chain/BEPs](https://github.com/bnb-chain/BEPs/pulls?q=quantum). There is no detector, and
+there will be none until a real transaction can be its test fixture.
 
 ## Where it shows
 

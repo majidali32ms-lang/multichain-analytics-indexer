@@ -2,7 +2,8 @@
 
 All three come from the chain's own RPC, so the chain-specific receipt fields are read as the
 chain reports them: ``l1Fee`` and its parts on OP Mainnet and Base, ``gasUsedForL1`` on
-Arbitrum, ``blobGasUsed`` and ``blobGasPrice`` for EIP-4844 blob transactions.
+Arbitrum, ``blobGasUsed`` and ``blobGasPrice`` for EIP-4844 blob transactions. On BNB Smart
+Chain the block's coinbase also labels the transaction (``bsc.py``).
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from eth_utils.address import to_checksum_address
 from eth_utils.crypto import keccak
 from pydantic import JsonValue
 
+from multichain_indexer.adapters.evm.bsc import bnb_labels
 from multichain_indexer.adapters.evm.encoding import parse_data, parse_quantity
 from multichain_indexer.adapters.evm.models import (
     EvmArbitrumGas,
@@ -34,6 +36,7 @@ TRANSACTION_KINDS = {
     0x7E: "deposit",
 }
 RECEIPT_SUCCESS = 1
+BNB_CHAIN = "bnb"
 SELECTOR_BYTES = 4
 WORD_BYTES = 32
 ADDRESS_BYTES = 20
@@ -70,14 +73,25 @@ def parse_transaction(
         MalformedResponse: A field is missing or does not have its documented format.
     """
     transaction, receipt, block = raw.transaction, raw.receipt, raw.block
-    native = _native(transaction, receipt, block).model_copy(
-        update={"history_source": history_source}
+    sender = _address(transaction, "from")
+    receiver = _optional_address(transaction, "to")
+    native = _native(transaction, receipt, block)
+    labels = (
+        bnb_labels(
+            sender=sender,
+            receiver=receiver,
+            effective_gas_price=native.effective_gas_price,
+            coinbase=_optional_address(block, "miner"),
+        )
+        if chain == BNB_CHAIN
+        else None
     )
+    native = native.model_copy(update={"history_source": history_source, "bnb": labels})
     return TransactionRecord(
         id=_text(transaction, "hash"),
         time=datetime.fromtimestamp(_quantity(block, "timestamp"), tz=UTC),
-        sender=_address(transaction, "from"),
-        receiver=_optional_address(transaction, "to") or native.created_contract,
+        sender=sender,
+        receiver=receiver or native.created_contract,
         amount=_quantity(transaction, "value"),
         fee=_total_fee(native),
         status=_status(receipt, final),
@@ -111,7 +125,7 @@ def _native(transaction: JsonObject, receipt: JsonObject, block: JsonObject) -> 
         created_contract=_optional_address(receipt, "contractAddress"),
         log_count=len(logs),
         token_transfers=tuple(
-            transfer for transfer in (_token_transfer(log) for log in logs) if transfer
+            transfer for transfer in (token_transfer(log) for log in logs) if transfer
         ),
         blob=_blob_gas(transaction, receipt),
         l1_data=_l1_data_fee(receipt),
@@ -194,7 +208,7 @@ def _logs(receipt: JsonObject) -> list[JsonObject]:
     return [log for log in logs if isinstance(log, dict)]
 
 
-def _token_transfer(log: JsonObject) -> EvmTokenTransfer | None:
+def token_transfer(log: JsonObject) -> EvmTokenTransfer | None:
     topics = log.get("topics")
     if not isinstance(topics, list) or len(topics) not in (FUNGIBLE_TOPICS, NFT_TOPICS):
         return None

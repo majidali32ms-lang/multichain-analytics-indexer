@@ -12,10 +12,10 @@ from __future__ import annotations
 
 import asyncio
 import threading
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable, Coroutine, Sequence
 from pathlib import Path
 from types import TracebackType
-from typing import Protocol, Self, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, Self, TypeVar, runtime_checkable
 
 import multichain_indexer.adapters  # noqa: F401  (registers the built-in chains)
 from multichain_indexer.core.base_indexer import ChainProfile
@@ -41,6 +41,16 @@ from multichain_indexer.follow import (
     follow_account,
 )
 
+if TYPE_CHECKING:
+    # Only for annotations: the EVM adapter is loaded when an EVM chain is used, so the API
+    # imports without it.
+    from multichain_indexer.adapters.evm.models import (
+        EvmExposureReport,
+        EvmFinality,
+        EvmTokenHolders,
+        EvmValidatorSet,
+    )
+
 DEFAULT_TRANSACTION_LIMIT = 20
 _T = TypeVar("_T")
 Describable = TransactionRecord | AccountRecord | AssetRecord | ContractRecord
@@ -51,6 +61,36 @@ class _TransactionLookup(Protocol):
     """An adapter that can read one transaction by its ID."""
 
     async def fetch_transaction(self, transaction_id: str, /) -> TransactionRecord: ...
+
+
+@runtime_checkable
+class _FinalityLookup(Protocol):
+    """An adapter that reports how far its finalized block trails the newest one."""
+
+    async def fetch_finality(self) -> EvmFinality: ...
+
+
+@runtime_checkable
+class _ExposureLookup(Protocol):
+    """An adapter that can say whether accounts have revealed their public keys."""
+
+    async def fetch_exposure(self, addresses: Sequence[str]) -> EvmExposureReport: ...
+
+
+@runtime_checkable
+class _ValidatorLookup(Protocol):
+    """An adapter that can read BNB Smart Chain's validator set."""
+
+    async def fetch_validators(self) -> EvmValidatorSet: ...
+
+
+@runtime_checkable
+class _HolderReport(Protocol):
+    """An adapter that reports a token's holders over a block range from its logs."""
+
+    async def fetch_token_holders(
+        self, token: str, *, from_block: int, to_block: int | None, nodereal_count: bool
+    ) -> EvmTokenHolders: ...
 
 
 class AsyncIndexer:
@@ -125,6 +165,59 @@ class AsyncIndexer:
                 f"{self.profile.name} cannot look up a single transaction by its ID"
             )
         return await self._indexer.fetch_transaction(transaction_id)
+
+    async def finality(self) -> EvmFinality:
+        """Read how far the finalized block trails the newest block now. Nothing is stored.
+
+        Raises:
+            UnsupportedChain: The chain is not an EVM chain.
+        """
+        if not isinstance(self._indexer, _FinalityLookup):
+            raise UnsupportedChain(f"{self.profile.name} has no finality readout; EVM chains do")
+        return await self._indexer.fetch_finality()
+
+    async def token_holders(
+        self,
+        token: str,
+        *,
+        from_block: int,
+        to_block: int | None = None,
+        nodereal_count: bool = False,
+    ) -> EvmTokenHolders:
+        """Report an ERC-20 or BEP-20 token's holders over a block range. Nothing is stored.
+
+        Only addresses that moved the token in the range are counted; ``to_block`` defaults to
+        the newest finalized block. ``nodereal_count`` adds NodeReal's own full-chain count.
+
+        Raises:
+            UnsupportedChain: The chain is not an EVM chain.
+        """
+        if not isinstance(self._indexer, _HolderReport):
+            raise UnsupportedChain(f"{self.profile.name} has no token holder report; EVM chains do")
+        return await self._indexer.fetch_token_holders(
+            token, from_block=from_block, to_block=to_block, nodereal_count=nodereal_count
+        )
+
+    async def key_exposure(self, addresses: Sequence[str]) -> EvmExposureReport:
+        """Say for each EVM account whether its public key is revealed (nonce > 0), as of
+        query time, and the share of the accounts that can sign. Nothing is stored.
+
+        Raises:
+            UnsupportedChain: The chain is not an EVM chain.
+        """
+        if not isinstance(self._indexer, _ExposureLookup):
+            raise UnsupportedChain(f"{self.profile.name} has no EVM public key report")
+        return await self._indexer.fetch_exposure(addresses)
+
+    async def validators(self) -> EvmValidatorSet:
+        """Read BNB Smart Chain's current validators and their names. Nothing is stored.
+
+        Raises:
+            UnsupportedChain: The chain is not BNB Smart Chain.
+        """
+        if not isinstance(self._indexer, _ValidatorLookup):
+            raise UnsupportedChain(f"{self.profile.name} has no BNB Smart Chain validator set")
+        return await self._indexer.fetch_validators()
 
     async def asset(self, asset_id: str | int) -> AssetRecord:
         """Fetch a token or asset, such as an Algorand ASA, and store it."""
@@ -297,6 +390,33 @@ class Indexer:
     def transaction(self, transaction_id: str) -> TransactionRecord:
         """See ``AsyncIndexer.transaction``."""
         return self._thread.run(self._inner.transaction(transaction_id))
+
+    def finality(self) -> EvmFinality:
+        """See ``AsyncIndexer.finality``."""
+        return self._thread.run(self._inner.finality())
+
+    def token_holders(
+        self,
+        token: str,
+        *,
+        from_block: int,
+        to_block: int | None = None,
+        nodereal_count: bool = False,
+    ) -> EvmTokenHolders:
+        """See ``AsyncIndexer.token_holders``."""
+        return self._thread.run(
+            self._inner.token_holders(
+                token, from_block=from_block, to_block=to_block, nodereal_count=nodereal_count
+            )
+        )
+
+    def key_exposure(self, addresses: Sequence[str]) -> EvmExposureReport:
+        """See ``AsyncIndexer.key_exposure``."""
+        return self._thread.run(self._inner.key_exposure(addresses))
+
+    def validators(self) -> EvmValidatorSet:
+        """See ``AsyncIndexer.validators``."""
+        return self._thread.run(self._inner.validators())
 
     def asset(self, asset_id: str | int) -> AssetRecord:
         """See ``AsyncIndexer.asset``."""

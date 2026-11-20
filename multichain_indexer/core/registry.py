@@ -29,6 +29,7 @@ PLANNED_CHAINS = (
     "base",
     "polygon",
     "bnb",
+    "opbnb",
     "bitcoin",
 )
 ENTRY_POINT_GROUP = "multichain_indexer.adapters"

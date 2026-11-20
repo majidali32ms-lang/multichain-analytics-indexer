@@ -10,7 +10,7 @@ transactions, in each chain's own terms. It keeps what it reads in a local datab
 syncs incrementally, and produces metrics and exports for analysis.
 
 This version supports **Algorand**, **Solana**, **NEAR**, the **EVM chains** (Ethereum,
-Arbitrum, OP Mainnet, Base, Polygon PoS, BNB Smart Chain) and **Bitcoin**. See the
+Arbitrum, OP Mainnet, Base, Polygon PoS, BNB Smart Chain, opBNB) and **Bitcoin**. See the
 [roadmap](#roadmap) for what comes next.
 
 ## Install
@@ -333,8 +333,8 @@ burnt. Accounts include their kind, access keys with their permissions, and thei
 
 ## EVM chains
 
-Ethereum, Arbitrum, OP Mainnet, Base, Polygon PoS and BNB Smart Chain share one adapter, with
-a profile per chain. Every lookup first checks the RPC endpoint's `eth_chainId`; an endpoint
+Ethereum, Arbitrum, OP Mainnet, Base, Polygon PoS, BNB Smart Chain and opBNB share one adapter,
+with a profile per chain. Every lookup first checks the RPC endpoint's `eth_chainId`; an endpoint
 of another network stops with `WrongNetwork` and names the setting to fix.
 
 | `--chain` | Testnet (default) | Gas token | Tokens |
@@ -345,10 +345,11 @@ of another network stops with `WrongNetwork` and names the setting to fix.
 | `base` | Base Sepolia | ETH | ERC-20 |
 | `polygon` | Amoy | POL | ERC-20 |
 | `bnb` | BNB Smart Chain testnet | BNB | BEP-20 |
+| `opbnb` | opBNB testnet | BNB | BEP-20 |
 
 `--network mainnet` must be asked for explicitly; `--network localnet` reads a local node such
 as Anvil at `http://localhost:8545`. Set `<CHAIN>_<NETWORK>_RPC_SERVER` in `.env` to use your
-own endpoint. Fees include the L1 data fee on OP Mainnet and Base and the blob fee on blob
+own endpoint. Fees include the L1 data fee on OP Mainnet, Base and opBNB and the blob fee on blob
 transactions; [the EVM page](https://majidali32ms-lang.github.io/multichain-analytics-indexer/chains/evm/)
 lists every field.
 
@@ -418,7 +419,8 @@ fields such as `l1Fee` (OP Mainnet, Base), `gasUsedForL1` (Arbitrum) and blob ga
 | OP Mainnet | Blockscout | Blockscout (OP Sepolia) |
 | Polygon PoS | Etherscan | Etherscan (Amoy) |
 | Base | Alchemy | Alchemy (Base Sepolia) |
-| BNB Smart Chain | NodeReal | none: NodeReal serves mainnet only, so transactions are read by hash |
+| BNB Smart Chain | NodeReal | reads blocks over the RPC, a short range at a time ([BNB Chain](#bnb-chain-bnb-smart-chain-and-opbnb)) |
+| opBNB | NodeReal | NodeReal |
 | any chain, `--network localnet` | reads every block over the RPC (Anvil) | |
 
 `<CHAIN>_<NETWORK>_HISTORY_SOURCE` switches the service (`blockscout`, `etherscan`,
@@ -485,8 +487,82 @@ out and fetched on a later sync.
 | `all` | also those that moved an ERC-20 (BEP-20) token to or from the address inside someone else's contract call | Blockscout and Etherscan: a second call, `tokentx`, so twice the calls (Blockscout charges 20 credits each, 40 a page); NodeReal and Alchemy: none, the same calls ask for BEP-20 or ERC-20 transfers too (250 and 120 compute units each) |
 
 Every extra transaction also costs three RPC reads (transaction, receipt, block). The block
-scan used on `localnet` lists direct transactions only. NFT transfers inside other calls are
+scan (`localnet`, BNB Smart Chain testnet) adds token transfers from the tokens' `Transfer`
+logs. NFT transfers inside other calls are
 not added. Sync into a new database after changing the scope: stored records stay as they are.
+
+## BNB Chain: BNB Smart Chain and opBNB
+
+`--chain bnb` (BNB Smart Chain, 0.45-second blocks) and `--chain opbnb` (its OP Stack layer 2,
+0.25-second blocks) add what is particular to them; the
+[BNB Chain page](https://majidali32ms-lang.github.io/multichain-analytics-indexer/chains/bnb/)
+has every rule, measurement and source.
+
+- **Finality.** BNB Smart Chain reads its own `eth_getFinalizedHeader`, which falls back from
+  fast finality to two thirds of the validators when fast finality stalls; other endpoints get
+  the `finalized` tag. No fixed confirmation count is used. `index finality` shows the lag.
+- **History.** NodeReal (free `NODEREAL_API_KEY`) on BNB Smart Chain mainnet and both opBNB
+  networks. BNB Smart Chain testnet has no free history service, so it reads blocks: about 10.7
+  hours of requests per day of chain data, so a range over 20,000 blocks needs
+  `BNB_TESTNET_SCAN_FROM_BLOCK`.
+- **BEP-20 holders.** `index holders` reports one token over a block range from its `Transfer`
+  logs: transfers, active addresses, holders, new and leaving holders, the top-ten share and
+  transfers per day, always with the block range and the time it covers. On BNB Smart Chain
+  the logs need the NodeReal key.
+- **Labels.** Each BNB Smart Chain transaction names its block's validator and whether it is a
+  system transaction; `index validators` lists the validator set with registered names.
+- **CAS20 (BEP-702).** `index token` reads and names the tokens the Jenner hard fork adds.
+- **Public keys.** `index account` and `index exposure` say whether an account has revealed its
+  public key (nonce > 0), as of query time, on every EVM chain. A lower bound: a permit or
+  other EIP-712 signature used on chain by someone else reveals a key while the nonce is
+  still 0.
+
+```bash
+multichain-indexer --chain bnb --network mainnet index finality
+```
+
+```bash
+multichain-indexer --chain opbnb --network mainnet index holders 0x9e5aac1ba1a2e6aed6b32689dfcf62a509ca96f3 --from-block <block>
+```
+
+```bash
+multichain-indexer --chain bnb --network mainnet index validators
+```
+
+```bash
+multichain-indexer --chain bnb --network mainnet index exposure <address> <address>
+```
+
+```text
+Newest block     134547807 (2026-11-19 18:02:18.150 UTC)
+Finalized block  134547805 (2026-11-19 18:02:17.250 UTC)
+Lag              2 blocks, 900 ms
+Source           eth_getFinalizedHeader
+Observed at      2026-11-19 18:02:19.053 UTC
+```
+
+```text
+Token               0xCa52000000000000000001a96a592e8b818886d1 (BEP-20)
+Blocks              141677813 to 141727812
+Time covered        2026-11-09 06:31:36.400 UTC to 2026-11-09 12:46:36.200 UTC
+Transfers           102
+Addresses active    42
+Holders at the end  42 of the addresses active in the range
+New holders         42
+Holders that left   0
+Total supply        1000000000000000 base units
+Top-ten share       100.00% of total supply (at least)
+```
+
+| Limit | |
+|---|---|
+| BNB Smart Chain logs | NodeReal only; the public endpoints refuse `eth_getLogs` |
+| Holder reports | only addresses that moved the token in the range, at most 2,000; balances at old blocks need the NodeReal key (public endpoints keep about 100 blocks of state) |
+| NodeReal free plan | 10 million compute units a month; USDT's logs cost about 32,000 to 35,500 a day of chain data, CAKE's about 1,900 (measured) |
+| Public key status | a lower bound, as of query time; at most 500 accounts a call |
+
+`examples/bnb/` has a script and a notebook, "BNB token report", that put the three together for
+USDT on opBNB with no key.
 
 ## Bitcoin
 
@@ -812,9 +888,12 @@ runs the ones that talk to testnet. [CONTRIBUTING.md](CONTRIBUTING.md) has the r
 | 0.5 | EVM chains: Ethereum, Arbitrum, Optimism, Base, Polygon PoS, BNB Smart Chain |
 | 0.6 | Bitcoin: UTXOs, address types, fee rates, quantum-exposed outputs |
 | 0.7 | Cross-chain metrics and reports, PostgreSQL, a read-only HTTP API, follow mode, plugins, Docker |
-| 0.8 | A local dashboard over your own database, on localhost only |
-| 0.9 | Wallet utilities: pre-flight checks, simulation, signing on test networks first |
-| 1.0 | Stable release on PyPI, with a docs page and demo per chain |
+| 0.8 | BNB Chain: opBNB, BNB Smart Chain finality, BEP-20 holder reports, validator and system labels, CAS20, public key status on EVM chains |
+| 0.9 | A local dashboard over your own database, on localhost only |
+| 0.10 | Wallet utilities: pre-flight checks, simulation, signing on test networks first |
+| 1.0 | Stable release on PyPI, with a docs page per chain |
+
+Planned chains, not yet started: Avalanche C-Chain, Zcash and Stellar.
 
 ## License
 

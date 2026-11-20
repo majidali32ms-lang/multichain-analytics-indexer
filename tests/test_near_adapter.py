@@ -879,7 +879,8 @@ def test_cli_index_contract_is_for_near_and_evm_chains_only(invoke: Any) -> None
     result = invoke("index", "contract", ACCOUNT)
     assert result.exit_code == 1
     assert (
-        "index contract is for near, ethereum, arbitrum, optimism, base, polygon, bnb, not algorand"
+        "index contract is for near, ethereum, arbitrum, optimism, base, polygon, bnb, opbnb, "
+        "not algorand"
     ) in result.output
 
 

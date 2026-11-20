@@ -1,0 +1,47 @@
+{
+  "network": "BNB Smart Chain mainnet",
+  "verified_validators": -2,
+  "replies": {
+    "eth_chainId": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": "0x38"
+    },
+    "eth_getFinalizedHeader": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "hash": "0xfa7d932534f2c22076abf1edce89129ae041d6a93d35e55ee3794dccdf697a7f",
+        "number": "0x804dbef",
+        "timestamp": "0x6aff2536",
+        "milliTimestamp": "0x1a1f4a95e42",
+        "miner": "0x9bb56c2b4dbe5a06d79911c9899b6f817696acfc",
+        "parentHash": "0x73f601a9ef279759c39ab6c7e2c342486e91ac9162f63d9fc5061dd84b29d21a"
+      }
+    },
+    "finalized": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "hash": "0xc9d3be2b9a1d478f1927cf4c551637d0b910a33e9c44f09c59889a9a63b91a22",
+        "number": "0x804dbf0",
+        "timestamp": "0x6aff2537",
+        "milliTimestamp": "0x1a1f4a96004",
+        "miner": "0x9f1b7fae54be07f4fee34eb1aacb39a1f7b6fc92",
+        "parentHash": "0xfa7d932534f2c22076abf1edce89129ae041d6a93d35e55ee3794dccdf697a7f"
+      }
+    },
+    "latest": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "hash": "0xa0338d5b32678e8e0016f2f292cc09b662b8155eba7e1adc5f2a0cb853fb82f7",
+        "number": "0x804dbf2",
+        "timestamp": "0x6aff2538",
+        "milliTimestamp": "0x1a1f4a96388",
+        "miner": "0x9f1b7fae54be07f4fee34eb1aacb39a1f7b6fc92",
+        "parentHash": "0xabe30a10011b29513727ef19c4fda3eceda16ccf6fc308de15111a6bb8f5fad6"
+      }
+    }
+  }
+}

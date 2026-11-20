@@ -1,6 +1,6 @@
 # EVM chains
 
-Ethereum, Arbitrum, OP Mainnet, Base, Polygon PoS and BNB Smart Chain share one adapter, with
+Ethereum, Arbitrum, OP Mainnet, Base, Polygon PoS, BNB Smart Chain and opBNB share one adapter, with
 a profile per chain in `multichain_indexer/adapters/evm/profiles.py`. A new EVM chain is one
 more profile. Requests go through the project's own HTTP client, with web3.py's helpers for
 addresses, Keccak-256 and ABI decoding.
@@ -15,6 +15,9 @@ addresses, Keccak-256 and ABI decoding.
 | `base` | Base Sepolia, 84532 | Base Mainnet, 8453 | ETH | ERC-20 |
 | `polygon` | Amoy, 80002 | Polygon PoS mainnet, 137 | POL | ERC-20 |
 | `bnb` | BNB Smart Chain testnet, 97 | BNB Smart Chain mainnet, 56 | BNB | BEP-20 |
+| `opbnb` | opBNB testnet, 5611 | opBNB mainnet, 204 | BNB | BEP-20 |
+
+BNB Smart Chain and opBNB have their own page: [BNB Chain](bnb.md).
 
 `--network localnet` reads a local node at `http://localhost:8545`, Anvil's default.
 
@@ -56,8 +59,9 @@ fields are read as the chain reports them:
 | `method_selector` | the first 4 bytes of the call data | all |
 | `token_transfers` | ERC-20 and ERC-721 `Transfer` events in the logs | all |
 | `blob` | `blobGasUsed`, `blobGasPrice` | Ethereum and BNB Smart Chain type 3 |
-| `l1_data` | `l1Fee`, `l1GasUsed`, `l1GasPrice`, `l1BlobBaseFee` and scalars | OP Mainnet, Base |
+| `l1_data` | `l1Fee`, `l1GasUsed`, `l1GasPrice`, `l1BlobBaseFee` and scalars | OP Mainnet, Base, opBNB |
 | `arbitrum` | `gasUsedForL1`, `l1BlockNumber`, `timeboosted` | Arbitrum |
+| `bnb` | the block's validator, system transaction, system contract ([BNB Chain](bnb.md#bnb-smart-chain-labels)) | BNB Smart Chain |
 | `history_source` | the service that listed the transaction | all |
 
 - `fee` is `gas_used * effective_gas_price` (`native.execution_fee`), plus the blob fee and
@@ -68,7 +72,7 @@ fields are read as the chain reports them:
   data-availability footprint, not a blob fee. Only a receipt with both pays a blob fee.
 - On Arbitrum the L1 part is already inside `gasUsed`, so it is not added again.
 - `status` is `failed` when the receipt says so; otherwise `final` up to the endpoint's
-  `finalized` block and `pending` after it. A sync never moves its checkpoint past the
+  `finalized` block (on BNB Smart Chain, `eth_getFinalizedHeader`) and `pending` after it. A sync never moves its checkpoint past the
   finalized block, so pending records are read again.
 - A receipt whose block hash is not the chain's block at that height came from a block a
   reorg replaced. It is not stored; the next sync finds the transaction where it landed.
@@ -86,12 +90,12 @@ hashes. `<CHAIN>_<NETWORK>_HISTORY_SOURCE` chooses it:
 |---|---|---|---|
 | `blockscout` | Blockscout's Etherscan-compatible `txlist` | `BLOCKSCOUT_API_KEY` | Ethereum, Arbitrum, OP Mainnet and their testnets |
 | `etherscan` | Etherscan's `txlist` | `ETHERSCAN_API_KEY` | Polygon PoS, Amoy |
-| `nodereal` | NodeReal's `nr_getAssetTransfers`, external transfers | `NODEREAL_API_KEY` | BNB Smart Chain mainnet |
+| `nodereal` | NodeReal's `nr_getAssetTransfers`, external transfers | `NODEREAL_API_KEY` | BNB Smart Chain mainnet, opBNB mainnet and testnet |
 | `alchemy` | Alchemy's `alchemy_getAssetTransfers`, external transfers including those that move no ETH | `ALCHEMY_API_KEY` | Base Mainnet, Base Sepolia |
-| `rpc-scan` | every block over the RPC | none | `localnet` |
+| `rpc-scan` | every block over the RPC | none (`NODEREAL_API_KEY` for BEP-20 logs on BNB Smart Chain) | `localnet`, BNB Smart Chain testnet |
 
-BNB Smart Chain testnet has no free default; a transaction there can still be read by hash
-from Python, with `fetch_transaction`. Alchemy serves Base with the same key on both networks,
+BNB Smart Chain testnet has no free history service, so it reads blocks, a short range at a
+time ([BNB Chain](bnb.md#account-history)). Alchemy serves Base with the same key on both networks,
 with no network to switch on; it refuses the `internal` category on Base ("only supported for
 ETH and MATIC"), so internal transfers are not listed. On Base Sepolia, Alchemy listed the same
 transactions as reading every block over the RPC: 3 of 3 over 200 blocks for a sender and 6 of
@@ -146,8 +150,8 @@ uses 40 credits a page instead of 20 and Etherscan two of its daily calls; NodeR
 same calls with one more category. Each added transaction costs three RPC reads. The two lists
 are read newest first, and a page stops at the highest block where a full list stopped, so
 neither list gets ahead of the other; a transaction split across two pages is read once. The
-block scan (`rpc-scan`) lists direct transactions only. Sync into a new database after
-changing the scope.
+block scan (`rpc-scan`) adds token transfers from the tokens' `Transfer` logs. Sync into a new
+database after changing the scope.
 
 ## Metrics
 
@@ -163,6 +167,15 @@ changing the scope.
 | `top_erc20_tokens_by_transfers` | `top_bep20_...` on BNB Smart Chain |
 | `top_contracts_by_calls` | receivers of transactions with call data |
 | `post_quantum` | nothing is live on any EVM chain; see [Post-quantum readiness](../post-quantum.md) |
+| `bnb_system_transactions`, `top_validators_by_transactions` | BNB Smart Chain only |
+
+## Commands for every EVM chain
+
+| Command | Shows |
+|---|---|
+| `index finality` | how far the finalized block trails the newest one, in blocks and milliseconds |
+| `index holders <token> --from-block N` | an ERC-20 or BEP-20 token's holders over a block range ([BNB Chain](bnb.md#bep-20-holder-reports) has the rules) |
+| `index exposure <address>...` | whether accounts have revealed their public keys (nonce > 0), as of query time ([rule](bnb.md#public-key-exposure)) |
 
 ## Limits
 

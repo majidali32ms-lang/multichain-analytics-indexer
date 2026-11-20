@@ -10,17 +10,20 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncIterator, Sequence
+from datetime import UTC, datetime
 from typing import ClassVar, cast
 
 from pydantic import JsonValue
 
 from multichain_indexer.adapters.evm.alchemy import create_alchemy_history
+from multichain_indexer.adapters.evm.bsc import cas20_variant, read_validators
 from multichain_indexer.adapters.evm.client import EvmRpc
 from multichain_indexer.adapters.evm.encoding import parse_quantity
 from multichain_indexer.adapters.evm.explorer import (
     create_blockscout_history,
     create_etherscan_history,
 )
+from multichain_indexer.adapters.evm.exposure import exposure_report
 from multichain_indexer.adapters.evm.history import (
     HISTORY_SCOPES,
     SCOPE_DIRECT,
@@ -28,14 +31,29 @@ from multichain_indexer.adapters.evm.history import (
     HistorySourceFactory,
     SourceContext,
 )
+from multichain_indexer.adapters.evm.holders import HolderQuery, HolderSources, token_holders
+from multichain_indexer.adapters.evm.logs import (
+    NODEREAL_RPC_SERVERS,
+    PUBLIC_LOGS_REFUSED,
+    logs_rpc,
+    nodereal_rpc,
+)
 from multichain_indexer.adapters.evm.metrics import evm_metrics
 from multichain_indexer.adapters.evm.models import (
     EvmAccount,
     EvmContract,
+    EvmExposureReport,
+    EvmFinality,
     EvmToken,
+    EvmTokenHolders,
     EvmTransaction,
+    EvmValidatorSet,
 )
-from multichain_indexer.adapters.evm.nodereal import create_nodereal_history
+from multichain_indexer.adapters.evm.nodereal import (
+    HOLDER_COUNT_COMPUTE_UNITS,
+    create_nodereal_history,
+    nodereal_holder_count,
+)
 from multichain_indexer.adapters.evm.parser import (
     is_contract_code,
     parse_account,
@@ -63,7 +81,7 @@ from multichain_indexer.core.errors import (
     UnsupportedChain,
     WrongNetwork,
 )
-from multichain_indexer.core.http import ApiClient, ResponseStore
+from multichain_indexer.core.http import ApiClient, JsonObject, ResponseStore
 from multichain_indexer.core.models import (
     AccountRecord,
     AssetRecord,
@@ -81,6 +99,17 @@ WEI_DECIMALS = 18
 # MCI_REQUESTS_PER_SECOND overrides it.
 DEFAULT_RPC_REQUESTS_PER_SECOND = 5.0
 HASH_HEX_DIGITS = 64
+MILLISECONDS_PER_SECOND = 1000
+# eth_getFinalizedHeader's -2: the highest block at least two thirds of the validators have
+# built on, or the fast-finalized block if that is higher (docs.bnbchain.org, bsc-api-list).
+TWO_THIRDS_OF_VALIDATORS = -2
+ECONOMIC_FINALITY_SOURCE = "eth_getFinalizedHeader"
+FINALIZED_TAG_SOURCE = "finalized tag"
+BNB_CHAIN_NAME = "bnb"
+MAX_EXPOSURE_ADDRESSES = 500
+# Two requests an account at 5 a second: about 10 seconds, 22 blocks on BNB Smart Chain and 40 on
+# opBNB, well inside the 100 blocks of state public endpoints keep.
+EXPOSURE_ADDRESSES_PER_BLOCK = 25
 HEX_CHARACTERS = frozenset("0123456789abcdefABCDEF")
 
 HISTORY_SOURCES: dict[str, HistorySourceFactory] = {
@@ -119,6 +148,7 @@ class EvmIndexer(BaseIndexer):
         self._history_name: str | None = None
         self._chain_confirmed = False
         self._finalized_height = 0
+        self._extra_requests = 0
 
     def validate_address(self, address: str) -> str:
         return validated_address(address)
@@ -147,19 +177,173 @@ class EvmIndexer(BaseIndexer):
         address = self.validate_address(asset_id)
         await self._require_chain()
         block = await self._rpc.block_number()
-        if not is_contract_code(await self._rpc.code(address, block)):
+        code = await self._rpc.code(address, block)
+        if not is_contract_code(code):
             raise NotFound(f"no contract is deployed at {address} on {self._network_title()}")
 
         async def call(data: bytes) -> bytes | None:
             return await self._rpc.call(address, data, block)
 
-        return await read_token(
+        record = await read_token(
             call,
             address=address,
             block_number=block,
             standard=self.chain.token_standard,
             chain=self.chain.name,
             network=self.network,
+        )
+        if self.chain.name != BNB_CHAIN_NAME:
+            return record
+        native = cast(EvmToken, record.native)
+        variant = cas20_variant(address, code)
+        return record.model_copy(
+            update={"native": native.model_copy(update={"cas20_variant": variant})}
+        )
+
+    async def fetch_token_holders(
+        self,
+        token: str,
+        *,
+        from_block: int,
+        to_block: int | None = None,
+        nodereal_count: bool = False,
+    ) -> EvmTokenHolders:
+        """Return holder figures for a token over ``from_block`` to ``to_block``.
+
+        Balances are read at ``to_block``. Public endpoints keep only recent state, so with
+        ``NODEREAL_API_KEY`` set, BNB Smart Chain and opBNB read state from NodeReal, which
+        keeps all of it, and ``to_block`` defaults to the newest finalized block; without it
+        ``to_block`` defaults to the newest block. ``nodereal_count`` adds NodeReal's own
+        full-chain holder count (free key, 50 compute units).
+
+        Raises:
+            InvalidInput: The range is outside the chain, too many addresses moved the token,
+                or the endpoint no longer keeps the state of ``to_block``.
+            ConfigError: The logs or the count need ``NODEREAL_API_KEY``.
+        """
+        address = self.validate_address(token)
+        await self._require_chain()
+        head = await self.chain_head()
+        sources = self._holder_sources()
+        try:
+            last = self._holder_range_end(to_block, head, sources.state is not self._rpc)
+            query = HolderQuery(
+                chain=self.chain.name,
+                network=self.network,
+                token=address,
+                standard=self.chain.token_standard,
+                from_block=from_block,
+                to_block=last,
+            )
+            report = await token_holders(sources, query)
+        finally:
+            await self._close_extra(sources)
+        if not nodereal_count:
+            return report
+        count = await nodereal_holder_count(self._settings, self.chain.name, self.network, address)
+        self._extra_requests += 1
+        return report.model_copy(
+            update={
+                "nodereal_holder_count": count,
+                "nodereal_compute_units": HOLDER_COUNT_COMPUTE_UNITS,
+            }
+        )
+
+    def _holder_sources(self) -> HolderSources:
+        # NodeReal keeps all state, so with its key it reads balances at any block; on BNB Smart
+        # Chain it also serves the logs the public endpoints refuse.
+        nodereal = nodereal_rpc(self.chain, self.network, self._settings)
+        refused = (self.chain.name, self.network) in PUBLIC_LOGS_REFUSED
+        if nodereal is not None and refused:
+            logs = nodereal
+        else:
+            logs = logs_rpc(self.chain, self.network, self._settings, self._rpc, "Transfer logs")
+        return HolderSources(
+            blocks=self._rpc,
+            state=nodereal or self._rpc,
+            logs=logs,
+            state_hint=self._state_hint(),
+        )
+
+    def _holder_range_end(self, to_block: int | None, head: int, archive_state: bool) -> int:
+        """Return the report's last block; without archive state, the newest block, whose
+        state every endpoint still keeps.
+
+        Raises:
+            InvalidInput: ``to_block`` is past the newest block.
+        """
+        if to_block is None:
+            return self.final_height(head) if archive_state else head
+        if to_block > head:
+            raise InvalidInput(f"--to-block {to_block} is past the newest block, {head}")
+        return to_block
+
+    def _state_hint(self) -> str:
+        if (self.chain.name, self.network) in NODEREAL_RPC_SERVERS:
+            return (
+                "set NODEREAL_API_KEY (free; NodeReal keeps all state), or end the range "
+                "within about 100 blocks of the newest block"
+            )
+        return "end the range within the endpoint's recent blocks, or use an archive endpoint"
+
+    async def _close_extra(self, sources: HolderSources) -> None:
+        for extra in {id(rpc): rpc for rpc in (sources.state, sources.logs)}.values():
+            if extra is not self._rpc:
+                self._extra_requests += extra.requests_made
+                await extra.aclose()
+
+    async def fetch_exposure(self, addresses: Sequence[str]) -> EvmExposureReport:
+        """Return whether each account has revealed its public key, read now.
+
+        Public endpoints keep state for about the newest 100 blocks, so the newest block is
+        read again every ``EXPOSURE_ADDRESSES_PER_BLOCK`` accounts; a revealed key stays
+        revealed, so accounts read at different blocks still add up.
+
+        Raises:
+            InvalidInput: No address, more than ``MAX_EXPOSURE_ADDRESSES``, or a bad address.
+        """
+        accounts = [self.validate_address(address) for address in addresses]
+        if not 0 < len(accounts) <= MAX_EXPOSURE_ADDRESSES:
+            raise InvalidInput(f"give between 1 and {MAX_EXPOSURE_ADDRESSES} addresses")
+        await self._require_chain()
+        states: list[EvmAccount] = []
+        block = 0
+        for position, address in enumerate(accounts):
+            if position % EXPOSURE_ADDRESSES_PER_BLOCK == 0:
+                block = await self._rpc.block_number()
+            states.append(await self._account_state(address, block))
+        return exposure_report(
+            chain=self.chain.name, network=self.network, accounts=states, addresses=accounts
+        )
+
+    async def _account_state(self, address: str, block: int) -> EvmAccount:
+        record = parse_account(
+            address=address,
+            balance=0,
+            nonce=await self._rpc.transaction_count(address, block),
+            code=await self._rpc.code(address, block),
+            block_number=block,
+            chain=self.chain.name,
+            network=self.network,
+        )
+        return cast(EvmAccount, record.native)
+
+    async def fetch_validators(self) -> EvmValidatorSet:
+        """Return BNB Smart Chain's current validators with their registered names.
+
+        Raises:
+            UnsupportedChain: The chain is not BNB Smart Chain.
+        """
+        if self.chain.name != BNB_CHAIN_NAME:
+            raise UnsupportedChain(f"{self.chain.title} has no BNB Smart Chain validator set")
+        await self._require_chain()
+        block = await self._rpc.block_number()
+        return EvmValidatorSet(
+            chain=self.chain.name,
+            network=self.network,
+            block_number=block,
+            observed_at=datetime.now(UTC),
+            validators=await read_validators(self._rpc, block),
         )
 
     async def fetch_contract(self, contract_id: str) -> ContractRecord:
@@ -196,6 +380,33 @@ class EvmIndexer(BaseIndexer):
         await self._require_chain()
         await self._refresh_finalized_height()
         return await self._rpc.block_number()
+
+    async def fetch_finality(self) -> EvmFinality:
+        """Return how far the finalized block trails the newest block, read now.
+
+        BNB Smart Chain asks ``eth_getFinalizedHeader`` first and falls back to the
+        ``finalized`` tag when the endpoint does not serve it; other chains use the tag.
+        """
+        await self._require_chain()
+        finalized, source = await self._finalized_header()
+        head = await self._rpc.latest_header()
+        head_block = _header_number(head)
+        reported = _header_number(finalized)
+        shown = finalized if reported <= head_block else head
+        head_ms, finalized_ms = _header_milliseconds(head), _header_milliseconds(shown)
+        return EvmFinality(
+            chain=self.chain.name,
+            network=self.network,
+            source=source,
+            head_block=head_block,
+            head_time=_time_of(head_ms),
+            finalized_block=min(reported, head_block),
+            finalized_time=_time_of(finalized_ms),
+            lag_blocks=max(head_block - reported, 0),
+            lag_milliseconds=max(head_ms - finalized_ms, 0),
+            finalized_above_head=reported > head_block,
+            observed_at=datetime.now(UTC),
+        )
 
     def final_height(self, head: int) -> int:
         # Blocks up to the endpoint's "finalized" block can no longer be replaced, and a
@@ -283,7 +494,7 @@ class EvmIndexer(BaseIndexer):
     @property
     def requests_made(self) -> int:
         history = self._history.requests_made if self._history else 0
-        return self._rpc.requests_made + history
+        return self._rpc.requests_made + history + self._extra_requests
 
     async def aclose(self) -> None:
         await self._rpc.aclose()
@@ -329,7 +540,16 @@ class EvmIndexer(BaseIndexer):
         return self.chain.networks[self.network].history_source
 
     async def _refresh_finalized_height(self) -> None:
-        self._finalized_height = await self._rpc.finalized_block_number()
+        header, _ = await self._finalized_header()
+        self._finalized_height = _header_number(header)
+
+    async def _finalized_header(self) -> tuple[JsonObject, str]:
+        if self.chain.economic_finality:
+            header = await self._rpc.economic_finalized_header(TWO_THIRDS_OF_VALIDATORS)
+            if header is not None:
+                return header, ECONOMIC_FINALITY_SOURCE
+            _log_no_economic_finality(self._network_title())
+        return await self._rpc.finalized_header(), FINALIZED_TAG_SOURCE
 
     async def _listed_record(self, tx_hash: str) -> TransactionRecord | None:
         record = await self._transaction_record(tx_hash, self._history_name)
@@ -413,6 +633,10 @@ class EvmIndexer(BaseIndexer):
             fields["Blobs"] = str(native.blob.blob_count)
         if native.token_transfers:
             fields["Token transfers"] = self._token_transfer_summary(native)
+        if native.bnb:
+            fields["Validator"] = native.bnb.validator
+            if native.bnb.system_transaction:
+                fields["System transaction"] = f"yes, to {native.bnb.system_contract}"
         return fields
 
     def _token_transfer_summary(self, native: EvmTransaction) -> str:
@@ -429,13 +653,18 @@ class EvmIndexer(BaseIndexer):
             kind = f"externally owned account, delegated to {native.delegated_to} (EIP-7702)"
         else:
             kind = "externally owned account"
-        return {
+        fields = {
             "Address": record.address,
             "Kind": kind,
             "Balance": self.profile.format_native(record.balance),
             "Nonce": str(native.nonce),
             "As of block": str(native.block_number),
         }
+        if native.key_exposure:
+            fields["Public key"] = (
+                f"{native.key_exposure}, as of block {native.block_number} (query time)"
+            )
+        return fields
 
 
 def _rpc_requests_per_second(settings: Settings) -> float:
@@ -463,6 +692,30 @@ def _log_missing(tx_hash: str) -> None:
     )
 
 
+def _log_no_economic_finality(network: str) -> None:
+    # A third-party endpoint may not serve BNB Smart Chain's own finality method, or may name no
+    # block; the standard tag still names a finalized block, without the probabilistic fallback.
+    logger.info(
+        "no block from eth_getFinalizedHeader; using the finalized tag",
+        extra={"network": network},
+    )
+
+
+def _header_number(header: JsonObject) -> int:
+    return parse_quantity(header.get("number"), "eth_getBlockByNumber")
+
+
+def _header_milliseconds(header: JsonObject) -> int:
+    if "milliTimestamp" in header:
+        return parse_quantity(header.get("milliTimestamp"), "eth_getBlockByNumber")
+    seconds = parse_quantity(header.get("timestamp"), "eth_getBlockByNumber")
+    return seconds * MILLISECONDS_PER_SECOND
+
+
+def _time_of(milliseconds: int) -> datetime:
+    return datetime.fromtimestamp(milliseconds / MILLISECONDS_PER_SECOND, tz=UTC)
+
+
 def _validate_hash(tx_hash: str) -> None:
     digits = tx_hash.removeprefix("0x")
     if not tx_hash.startswith("0x") or len(digits) != HASH_HEX_DIGITS:
@@ -478,9 +731,12 @@ def _block_number(receipt: dict[str, JsonValue]) -> int:
 def _describe_token(record: AssetRecord) -> dict[str, str]:
     native = cast(EvmToken, record.native)
     decimals = str(record.decimals) if native.decimals_declared else "not declared, so 0"
+    standard = native.standard
+    if native.cas20_variant:
+        standard = f"{standard} (CAS20 {native.cas20_variant}, BEP-702)"
     return {
         "Token": record.id,
-        "Standard": native.standard,
+        "Standard": standard,
         "Name": record.name or "not declared",
         "Symbol": record.unit or "not declared",
         "Decimals": decimals,
