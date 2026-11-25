@@ -19,7 +19,7 @@ base58==2.1.1
     # via multichain-analytics-indexer
 bitarray==3.12.3
     # via eth-account
-certifi==2026.10.23
+certifi==2026.11.20
     # via requests
 cffi==2.1.1 ; platform_python_implementation != 'PyPy'
     # via pynacl
