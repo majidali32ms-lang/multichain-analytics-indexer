@@ -137,7 +137,7 @@ pyunormalize==18.0.0
     # via web3
 pywin32==312 ; sys_platform == 'win32'
     # via web3
-regex==2026.11.9
+regex==2026.11.19
     # via parsimonious
 requests==2.34.2
     # via web3
